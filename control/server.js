@@ -122,46 +122,92 @@ app.get('/spectra.apk', async (req, res) => {
                 downloadUrl: `${req.protocol}://${req.get('host')}/spectra.apk`
             });
             
-            // Return HTML page with QR code and instructions
+            // Return HTML page with Device Pairing System
             res.status(202).send(`
             <!DOCTYPE html>
             <html>
             <head>
-                <title>SpectraTM APK - Building</title>
+                <title>SpectraTM - Device Pairing & APK</title>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
-                    body { font-family: 'Courier New', monospace; background: #000; color: #00ff00; padding: 20px; text-align: center; }
-                    .container { max-width: 600px; margin: 0 auto; }
-                    .logo { color: #00ff00; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-                    .status { background: #001100; padding: 15px; border: 1px solid #00ff00; margin: 10px 0; }
-                    .qr-code { margin: 20px 0; }
-                    .instructions { text-align: left; background: #001100; padding: 15px; border: 1px solid #00ff00; }
+                    body { font-family: 'Courier New', monospace; background: #000; color: #00ff00; padding: 20px; margin: 0; }
+                    .container { max-width: 800px; margin: 0 auto; }
+                    .logo { color: #00ff00; font-size: 24px; font-weight: bold; margin-bottom: 20px; text-align: center; }
+                    .section { background: #001100; padding: 20px; border: 1px solid #00ff00; margin: 15px 0; border-radius: 5px; }
+                    .pairing-box { background: #001a00; padding: 15px; border: 1px solid #00aa00; margin: 10px 0; }
+                    .credential { background: #002200; padding: 8px; margin: 5px 0; font-family: monospace; display: flex; justify-content: space-between; align-items: center; }
+                    .copy-btn { background: #00ff00; color: #000; padding: 5px 10px; border: none; cursor: pointer; font-size: 12px; }
+                    .copy-btn:hover { background: #00aa00; }
+                    .button { background: #00ff00; color: #000; padding: 10px 20px; text-decoration: none; display: inline-block; margin: 5px; cursor: pointer; border: none; }
+                    .button:hover { background: #00aa00; }
+                    .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; }
+                    .status-waiting { background: #ffaa00; }
+                    .status-connected { background: #00ff00; }
+                    .instructions { text-align: left; line-height: 1.6; }
                     .command { background: #002200; padding: 10px; margin: 10px 0; font-family: monospace; word-break: break-all; }
-                    .refresh { background: #00ff00; color: #000; padding: 10px 20px; text-decoration: none; display: inline-block; margin: 10px; }
+                    .highlight { color: #ffff00; font-weight: bold; }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <div class="logo">🔍 SPECTRATM</div>
+                    <div class="logo">🔍 SPECTRATM v2.0</div>
                     
-                    <div class="status">
+                    <div class="section">
+                        <h2>📱 Device Pairing System</h2>
+                        <p>Generate credentials to connect your Android device:</p>
+                        
+                        <div class="pairing-box">
+                            <div id="pairingInfo" style="display: none;">
+                                <div class="credential">
+                                    <span>Device ID: <span id="deviceId" class="highlight">----</span></span>
+                                    <button class="copy-btn" onclick="copyToClipboard('deviceId')">Copy</button>
+                                </div>
+                                <div class="credential">
+                                    <span>Token: <span id="token" class="highlight">----</span></span>
+                                    <button class="copy-btn" onclick="copyToClipboard('token')">Copy</button>
+                                </div>
+                                <div class="credential">
+                                    <span>Server URL: <span class="highlight">${req.protocol}://${req.get('host')}/live</span></span>
+                                    <button class="copy-btn" onclick="copyToClipboard('serverUrl')">Copy</button>
+                                </div>
+                                
+                                <div style="margin-top: 15px;">
+                                    <span class="status-indicator" id="statusIndicator"></span>
+                                    <span id="statusText">Waiting for device connection...</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="button" onclick="generateDevicePair()">Generate New Pair</button>
+                        <button class="button" onclick="checkStatus()">Check Status</button>
+                    </div>
+
+                    <div class="section">
                         <h2>📱 APK Status: Building...</h2>
                         <p>GitHub Actions is compiling the APK. This usually takes 3-5 minutes.</p>
-                        <p><strong>Build Progress:</strong> <a href="https://github.com/JosimarPessanha25/spectratm-os/actions" target="_blank">Check GitHub Actions</a></p>
+                        <p><strong>Build Progress:</strong> <a href="https://github.com/JosimarPessanha25/spectratm-os/actions" target="_blank" style="color: #00ff00;">Check GitHub Actions</a></p>
                     </div>
 
-                    <div class="qr-code">
-                        <h3>🎯 Temporary QR Deployment</h3>
-                        <img src="${deployment.qrCode}" alt="QR Code" style="max-width: 300px;">
-                        <p>Scan with Android device for installation instructions</p>
+                    <div class="section">
+                        <h3>📋 Android Setup Instructions:</h3>
+                        <div class="instructions">
+                            <p><strong>1. Install APK:</strong></p>
+                            <div class="command">• Download APK (when ready) or use manual installation methods below</div>
+                            
+                            <p><strong>2. Open SpectraTM App:</strong></p>
+                            <div class="command">• Launch the app after installation</div>
+                            
+                            <p><strong>3. Enter Device Credentials:</strong></p>
+                            <div class="command">• Select "Manual Setup"<br>• Enter Device ID: <span class="highlight">[Generated above]</span><br>• Enter Token: <span class="highlight">[Generated above]</span><br>• Server URL is auto-filled</div>
+                            
+                            <p><strong>4. Connect:</strong></p>
+                            <div class="command">• Tap "Connect" to establish connection<br>• Grant required permissions<br>• Connection expires in 5 minutes</div>
+                        </div>
                     </div>
 
-                    <div class="instructions">
+                    <div class="section">
                         <h3>⚡ Alternative Installation Methods:</h3>
-                        
-                        <h4>🚀 One-Liner Bootstrap (Recommended):</h4>
-                        <div class="command">DEVICE_ID="f47ac10b58cc4372a2c5" TOKEN="spec2024" bash &lt;(curl -s https://raw.githubusercontent.com/JosimarPessanha25/spectratm-os/main/one-liner.sh)</div>
                         
                         <h4>🔧 Manual Build:</h4>
                         <div class="command">git clone https://github.com/JosimarPessanha25/spectratm-os.git<br>cd spectratm-os<br>./bootstrap.sh</div>
@@ -170,13 +216,130 @@ app.get('/spectra.apk', async (req, res) => {
                         <div class="command">adb install -r spectra.apk<br>adb shell dpm set-device-owner com.android.dpc/.CoreService</div>
                     </div>
 
-                    <a href="/spectra.apk" class="refresh">🔄 Refresh / Check APK</a>
-                    <a href="/dashboard" class="refresh">🌐 Dashboard</a>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <a href="/spectra.apk" class="button">🔄 Refresh APK</a>
+                        <a href="/dashboard" class="button">🌐 Dashboard</a>
+                        <a href="/live" class="button">📊 Live Control</a>
+                    </div>
                 </div>
 
                 <script>
-                    // Auto-refresh every 30 seconds to check for APK
-                    setTimeout(() => window.location.reload(), 30000);
+                    let currentDeviceId = null;
+                    let currentToken = null;
+                    let statusCheckInterval = null;
+
+                    function copyToClipboard(elementId) {
+                        const element = document.getElementById(elementId);
+                        let text = element.textContent;
+                        
+                        if (elementId === 'serverUrl') {
+                            text = '${req.protocol}://${req.get('host')}/live';
+                        }
+                        
+                        navigator.clipboard.writeText(text).then(() => {
+                            const btn = element.parentElement.querySelector('.copy-btn');
+                            const originalText = btn.textContent;
+                            btn.textContent = 'Copied!';
+                            btn.style.background = '#00aa00';
+                            setTimeout(() => {
+                                btn.textContent = originalText;
+                                btn.style.background = '#00ff00';
+                            }, 2000);
+                        });
+                    }
+
+                    async function generateDevicePair() {
+                        try {
+                            const response = await fetch('/api/pair-device');
+                            const data = await response.json();
+                            
+                            if (data.success) {
+                                currentDeviceId = data.deviceId;
+                                currentToken = data.token;
+                                
+                                document.getElementById('deviceId').textContent = currentDeviceId;
+                                document.getElementById('token').textContent = currentToken;
+                                document.getElementById('pairingInfo').style.display = 'block';
+                                
+                                updateStatus('waiting');
+                                startStatusCheck();
+                            }
+                        } catch (error) {
+                            console.error('Error generating pair:', error);
+                        }
+                    }
+
+                    async function checkStatus() {
+                        if (!currentDeviceId || !currentToken) return;
+                        
+                        try {
+                            const response = await fetch(\`/api/device-status/\${currentDeviceId}/\${currentToken}\`);
+                            const data = await response.json();
+                            
+                            if (data.connected) {
+                                updateStatus('connected');
+                                if (statusCheckInterval) {
+                                    clearInterval(statusCheckInterval);
+                                }
+                            } else if (data.expired) {
+                                updateStatus('expired');
+                                if (statusCheckInterval) {
+                                    clearInterval(statusCheckInterval);
+                                }
+                            } else {
+                                updateStatus('waiting');
+                            }
+                        } catch (error) {
+                            console.error('Error checking status:', error);
+                        }
+                    }
+
+                    function updateStatus(status) {
+                        const indicator = document.getElementById('statusIndicator');
+                        const text = document.getElementById('statusText');
+                        
+                        switch (status) {
+                            case 'waiting':
+                                indicator.className = 'status-indicator status-waiting';
+                                text.textContent = 'Waiting for device connection...';
+                                break;
+                            case 'connected':
+                                indicator.className = 'status-indicator status-connected';
+                                text.textContent = 'Device connected successfully!';
+                                break;
+                            case 'expired':
+                                indicator.className = 'status-indicator';
+                                indicator.style.background = '#ff0000';
+                                text.textContent = 'Connection expired. Generate new pair.';
+                                break;
+                        }
+                    }
+
+                    function startStatusCheck() {
+                        if (statusCheckInterval) {
+                            clearInterval(statusCheckInterval);
+                        }
+                        statusCheckInterval = setInterval(checkStatus, 2000);
+                        
+                        // Stop checking after 5 minutes
+                        setTimeout(() => {
+                            if (statusCheckInterval) {
+                                clearInterval(statusCheckInterval);
+                            }
+                        }, 5 * 60 * 1000);
+                    }
+
+                    // Auto-refresh APK status every 30 seconds
+                    setInterval(() => {
+                        // Check if APK is now available
+                        fetch('/spectra.apk', { method: 'HEAD' })
+                            .then(response => {
+                                if (response.ok && response.headers.get('content-type') === 'application/vnd.android.package-archive') {
+                                    // APK is ready, reload page
+                                    window.location.reload();
+                                }
+                            });
+                    }, 30000);
                 </script>
             </body>
             </html>
