@@ -303,6 +303,35 @@
                     </div>
                 </div>
                 
+                <!-- Manual Entry Section -->
+                <div class="manual-entry-section" style="margin-top: 20px;">
+                    <h4>✍️ Manual Entry</h4>
+                    <p style="color: #888; font-size: 12px; margin-bottom: 10px;">Already have Device ID and Token?</p>
+                    
+                    <div style="background: rgba(0,50,0,0.2); padding: 15px; border-radius: 5px; border: 1px solid #004400;">
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; color: #00ff00;">Device ID:</label>
+                            <input type="text" id="manualDeviceId" placeholder="ex: 3fae-b2c4-7a8f" 
+                                   style="width: 100%; background: #000; color: #00ff00; border: 1px solid #00aa00; padding: 8px; font-family: monospace; border-radius: 3px;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; color: #00ff00;">Token:</label>
+                            <input type="text" id="manualToken" placeholder="ex: 8L2Y" 
+                                   style="width: 100%; background: #000; color: #00ff00; border: 1px solid #00aa00; padding: 8px; font-family: monospace; border-radius: 3px;">
+                        </div>
+                        
+                        <div style="margin: 10px 0; font-size: 12px;">
+                            <span id="manualStatusIndicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #666; margin-right: 8px;"></span>
+                            <span id="manualStatusText" style="color: #888;">Enter credentials to verify</span>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" onclick="checkManualStatus()" style="flex: 1; font-size: 12px;">Verify</button>
+                            <button class="btn" onclick="setManualCredentials()" style="flex: 1; font-size: 12px;">Use These</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Manual Connection -->
                 <div class="manual-section" style="margin-top: 20px;">
                     <h4>🔄 Quick Actions</h4>
@@ -764,6 +793,79 @@
             if (pairCheckInterval) {
                 clearInterval(pairCheckInterval);
             }
+        }
+
+        // Manual entry functions
+        async function checkManualStatus() {
+            const deviceId = document.getElementById('manualDeviceId').value.trim();
+            const token = document.getElementById('manualToken').value.trim();
+            
+            if (!deviceId || !token) {
+                updateManualStatus('error', 'Please enter both Device ID and Token');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/device-status/${deviceId}/${token}`);
+                const data = await response.json();
+                
+                if (!data.exists) {
+                    updateManualStatus('error', 'Device ID not found');
+                } else if (!data.validToken) {
+                    updateManualStatus('error', 'Invalid Token for this Device ID');
+                } else if (data.expired) {
+                    updateManualStatus('error', 'Connection expired');
+                } else if (data.connected) {
+                    updateManualStatus('connected', 'Device connected successfully!');
+                } else {
+                    updateManualStatus('waiting', 'Valid credentials, waiting for device...');
+                }
+            } catch (error) {
+                updateManualStatus('error', 'Error checking status: ' + error.message);
+            }
+        }
+
+        function setManualCredentials() {
+            const deviceId = document.getElementById('manualDeviceId').value.trim();
+            const token = document.getElementById('manualToken').value.trim();
+            
+            if (!deviceId || !token) {
+                updateManualStatus('error', 'Please enter both Device ID and Token');
+                return;
+            }
+            
+            // Set as current credentials and update main display
+            currentDeviceId = deviceId;
+            currentToken = token;
+            
+            document.getElementById('deviceId').textContent = deviceId;
+            document.getElementById('deviceToken').textContent = token;
+            document.getElementById('devicePairInfo').style.display = 'block';
+            document.getElementById('pairStatus').textContent = 'Waiting for device connection...';
+            document.getElementById('pairStatus').style.color = '#ffaa00';
+            document.getElementById('pairDeviceBtn').textContent = 'Generate New Pair';
+            
+            updateManualStatus('waiting', 'Credentials set! Use these in your Android app');
+            startPairCheck();
+        }
+
+        function updateManualStatus(status, message) {
+            const indicator = document.getElementById('manualStatusIndicator');
+            const text = document.getElementById('manualStatusText');
+            
+            switch (status) {
+                case 'waiting':
+                    indicator.style.background = '#ffaa00';
+                    break;
+                case 'connected':
+                    indicator.style.background = '#00ff00';
+                    break;
+                case 'error':
+                    indicator.style.background = '#ff0000';
+                    break;
+            }
+            
+            text.textContent = message;
         }
 
         function downloadAPK() {

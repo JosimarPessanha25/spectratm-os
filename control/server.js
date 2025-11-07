@@ -184,6 +184,32 @@ app.get('/spectra.apk', async (req, res) => {
                     </div>
 
                     <div class="section">
+                        <h2>✍️ Manual Entry</h2>
+                        <p>Already have Device ID and Token? Enter them here:</p>
+                        
+                        <div class="pairing-box">
+                            <div class="credential">
+                                <span>Device ID:</span>
+                                <input type="text" id="manualDeviceId" placeholder="ex: 3fae-b2c4-7a8f" 
+                                       style="background: #002200; color: #00ff00; border: 1px solid #00aa00; padding: 5px; margin: 0 10px; font-family: monospace;">
+                            </div>
+                            <div class="credential">
+                                <span>Token:</span>
+                                <input type="text" id="manualToken" placeholder="ex: 8L2Y" 
+                                       style="background: #002200; color: #00ff00; border: 1px solid #00aa00; padding: 5px; margin: 0 10px; font-family: monospace;">
+                            </div>
+                            
+                            <div style="margin-top: 15px;">
+                                <span class="status-indicator" id="manualStatusIndicator"></span>
+                                <span id="manualStatusText">Enter credentials to check status</span>
+                            </div>
+                        </div>
+                        
+                        <button class="button" onclick="checkManualStatus()">Verify Connection</button>
+                        <button class="button" onclick="setManualCredentials()">Use These Credentials</button>
+                    </div>
+
+                    <div class="section">
                         <h2>📱 APK Status: Building...</h2>
                         <p>GitHub Actions is compiling the APK. This usually takes 3-5 minutes.</p>
                         <p><strong>Build Progress:</strong> <a href="https://github.com/JosimarPessanha25/spectratm-os/actions" target="_blank" style="color: #00ff00;">Check GitHub Actions</a></p>
@@ -327,6 +353,78 @@ app.get('/spectra.apk', async (req, res) => {
                                 clearInterval(statusCheckInterval);
                             }
                         }, 5 * 60 * 1000);
+                    }
+
+                    // Manual entry functions
+                    async function checkManualStatus() {
+                        const deviceId = document.getElementById('manualDeviceId').value.trim();
+                        const token = document.getElementById('manualToken').value.trim();
+                        
+                        if (!deviceId || !token) {
+                            updateManualStatus('error', 'Please enter both Device ID and Token');
+                            return;
+                        }
+                        
+                        try {
+                            const response = await fetch(\`/api/device-status/\${deviceId}/\${token}\`);
+                            const data = await response.json();
+                            
+                            if (!data.exists) {
+                                updateManualStatus('error', 'Device ID not found');
+                            } else if (!data.validToken) {
+                                updateManualStatus('error', 'Invalid Token for this Device ID');
+                            } else if (data.expired) {
+                                updateManualStatus('error', 'Connection expired');
+                            } else if (data.connected) {
+                                updateManualStatus('connected', 'Device connected successfully!');
+                            } else {
+                                updateManualStatus('waiting', 'Valid credentials, waiting for device...');
+                            }
+                        } catch (error) {
+                            updateManualStatus('error', 'Error checking status: ' + error.message);
+                        }
+                    }
+
+                    function setManualCredentials() {
+                        const deviceId = document.getElementById('manualDeviceId').value.trim();
+                        const token = document.getElementById('manualToken').value.trim();
+                        
+                        if (!deviceId || !token) {
+                            updateManualStatus('error', 'Please enter both Device ID and Token');
+                            return;
+                        }
+                        
+                        // Set as current credentials and update main display
+                        currentDeviceId = deviceId;
+                        currentToken = token;
+                        
+                        document.getElementById('deviceId').textContent = deviceId;
+                        document.getElementById('token').textContent = token;
+                        document.getElementById('pairingInfo').style.display = 'block';
+                        
+                        updateManualStatus('waiting', 'Credentials set! Use these in your Android app');
+                        updateStatus('waiting');
+                        startStatusCheck();
+                    }
+
+                    function updateManualStatus(status, message) {
+                        const indicator = document.getElementById('manualStatusIndicator');
+                        const text = document.getElementById('manualStatusText');
+                        
+                        switch (status) {
+                            case 'waiting':
+                                indicator.className = 'status-indicator status-waiting';
+                                break;
+                            case 'connected':
+                                indicator.className = 'status-indicator status-connected';
+                                break;
+                            case 'error':
+                                indicator.className = 'status-indicator';
+                                indicator.style.background = '#ff0000';
+                                break;
+                        }
+                        
+                        text.textContent = message;
                     }
 
                     // Auto-refresh APK status every 30 seconds
