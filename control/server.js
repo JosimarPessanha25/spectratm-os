@@ -53,30 +53,92 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // APK Download endpoint with fallback
-app.get('/spectra.apk', (req, res) => {
+app.get('/spectra.apk', async (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'spectra.apk');
     
-    // Check if local APK exists
-    if (fs.existsSync(apkPath) && fs.statSync(apkPath).size > 100) {
+    // Check if local APK exists and has reasonable size
+    if (fs.existsSync(apkPath) && fs.statSync(apkPath).size > 1024 * 100) { // At least 100KB
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.setHeader('Content-Disposition', 'attachment; filename=spectra.apk');
         res.sendFile(apkPath);
     } else {
-        // Return helpful message
-        res.status(404).json({
-            error: 'APK not available yet',
-            message: 'GitHub Actions is building the APK. Try again in a few minutes.',
-            status: 'Building',
-            alternatives: [
-                'Use QR deployment from dashboard → Deploy section',
-                'Build locally with: ./bootstrap.sh', 
-                'Check GitHub Actions progress at: https://github.com/JosimarPessanha25/spectratm-os/actions'
-            ],
-            instructions: {
-                local_build: 'git clone https://github.com/JosimarPessanha25/spectratm-os.git && cd spectratm-os && ./bootstrap.sh',
-                one_liner: 'DEVICE_ID="f47ac10b58cc4372a2c5" TOKEN="spec2024" bash <(curl -s https://raw.githubusercontent.com/JosimarPessanha25/spectratm-os/main/one-liner.sh)'
-            }
-        });
+        // Generate QR deployment as fallback
+        try {
+            const deployment = await qrDeployment.generateDeploymentQR('v2.0', {
+                serverUrl: `${req.protocol}://${req.get('host')}`,
+                downloadUrl: `${req.protocol}://${req.get('host')}/spectra.apk`
+            });
+            
+            // Return HTML page with QR code and instructions
+            res.status(202).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>SpectraTM APK - Building</title>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body { font-family: 'Courier New', monospace; background: #000; color: #00ff00; padding: 20px; text-align: center; }
+                    .container { max-width: 600px; margin: 0 auto; }
+                    .logo { color: #00ff00; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+                    .status { background: #001100; padding: 15px; border: 1px solid #00ff00; margin: 10px 0; }
+                    .qr-code { margin: 20px 0; }
+                    .instructions { text-align: left; background: #001100; padding: 15px; border: 1px solid #00ff00; }
+                    .command { background: #002200; padding: 10px; margin: 10px 0; font-family: monospace; word-break: break-all; }
+                    .refresh { background: #00ff00; color: #000; padding: 10px 20px; text-decoration: none; display: inline-block; margin: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="logo">🔍 SPECTRATM</div>
+                    
+                    <div class="status">
+                        <h2>📱 APK Status: Building...</h2>
+                        <p>GitHub Actions is compiling the APK. This usually takes 3-5 minutes.</p>
+                        <p><strong>Build Progress:</strong> <a href="https://github.com/JosimarPessanha25/spectratm-os/actions" target="_blank">Check GitHub Actions</a></p>
+                    </div>
+
+                    <div class="qr-code">
+                        <h3>🎯 Temporary QR Deployment</h3>
+                        <img src="${deployment.qrCode}" alt="QR Code" style="max-width: 300px;">
+                        <p>Scan with Android device for installation instructions</p>
+                    </div>
+
+                    <div class="instructions">
+                        <h3>⚡ Alternative Installation Methods:</h3>
+                        
+                        <h4>🚀 One-Liner Bootstrap (Recommended):</h4>
+                        <div class="command">DEVICE_ID="f47ac10b58cc4372a2c5" TOKEN="spec2024" bash &lt;(curl -s https://raw.githubusercontent.com/JosimarPessanha25/spectratm-os/main/one-liner.sh)</div>
+                        
+                        <h4>🔧 Manual Build:</h4>
+                        <div class="command">git clone https://github.com/JosimarPessanha25/spectratm-os.git<br>cd spectratm-os<br>./bootstrap.sh</div>
+                        
+                        <h4>📱 ADB Installation (if APK ready):</h4>
+                        <div class="command">adb install -r spectra.apk<br>adb shell dpm set-device-owner com.android.dpc/.CoreService</div>
+                    </div>
+
+                    <a href="/spectra.apk" class="refresh">🔄 Refresh / Check APK</a>
+                    <a href="/dashboard" class="refresh">🌐 Dashboard</a>
+                </div>
+
+                <script>
+                    // Auto-refresh every 30 seconds to check for APK
+                    setTimeout(() => window.location.reload(), 30000);
+                </script>
+            </body>
+            </html>
+            `);
+        } catch (error) {
+            res.status(503).json({
+                error: 'APK not ready',
+                message: 'APK is being built by GitHub Actions. Please wait a few minutes.',
+                buildStatus: 'https://github.com/JosimarPessanha25/spectratm-os/actions',
+                alternatives: {
+                    oneLiner: 'DEVICE_ID="f47ac10b58cc4372a2c5" TOKEN="spec2024" bash <(curl -s https://raw.githubusercontent.com/JosimarPessanha25/spectratm-os/main/one-liner.sh)',
+                    manual: 'git clone https://github.com/JosimarPessanha25/spectratm-os.git && cd spectratm-os && ./bootstrap.sh'
+                }
+            });
+        }
     }
 });
 
