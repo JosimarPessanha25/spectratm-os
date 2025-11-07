@@ -206,6 +206,229 @@ const Dashboard = ({ socket, devices }) => {
             <Doughnut data={deviceStats} options={doughnutOptions} />
           </div>
         </div>
+
+        {/* QR Code Scanner Section */}
+        <QRScanner />
+      </div>
+    </div>
+  );
+};
+
+// QR Code Scanner Component
+const QRScanner = () => {
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedData, setScannedData] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [jsQR, setJsQR] = useState(null);
+  const videoRef = React.useRef(null);
+
+  // Load jsQR dynamically
+  React.useEffect(() => {
+    import('jsqr').then(module => {
+      setJsQR(module.default);
+    }).catch(error => {
+      console.error('Failed to load jsQR:', error);
+    });
+  }, []);
+
+  const startScanning = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+      setCameraStream(stream);
+      setIsScanning(true);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Camera access denied or not available');
+    }
+  };
+
+  const stopScanning = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsScanning(false);
+  };
+
+  const processFrame = () => {
+    if (!isScanning || !videoRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Simple QR detection (in production, use jsQR library)
+    try {
+      // This is a placeholder - in real implementation, use jsQR or similar
+      const qrData = detectQRCode(imageData);
+      if (qrData) {
+        setScannedData(qrData);
+        stopScanning();
+        handleQRData(qrData);
+      }
+    } catch (error) {
+      // Continue scanning
+    }
+
+    if (isScanning) {
+      requestAnimationFrame(processFrame);
+    }
+  };
+
+  const detectQRCode = (imageData) => {
+    if (!jsQR) return null;
+    
+    try {
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert",
+      });
+      return code ? code.data : null;
+    } catch (error) {
+      console.error('QR detection error:', error);
+      return null;
+    }
+  };
+
+  const handleQRData = (data) => {
+    try {
+      const qrPayload = JSON.parse(data);
+      if (qrPayload.t === 'spectratm_deploy') {
+        // Handle SpectraTM deployment QR
+        alert(`✅ SpectraTM Deployment QR Detected!\n\nVersion: ${qrPayload.v}\nDownloading APK...`);
+        window.open(qrPayload.d, '_blank'); // Open download URL
+      } else {
+        // Handle other QR codes
+        alert(`ℹ️ QR Code Content:\n${data}`);
+      }
+    } catch (error) {
+      // Not JSON, treat as plain text
+      if (data.startsWith('http')) {
+        alert(`🔗 URL QR Code Detected:\n${data}\n\nOpening link...`);
+        window.open(data, '_blank');
+      } else {
+        alert(`📝 Text QR Code:\n${data}`);
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    if (isScanning) {
+      processFrame();
+    }
+  }, [isScanning]);
+
+  return (
+    <div className="chart-container" style={{ marginTop: '1rem' }}>
+      <h3 style={{ marginBottom: '1rem', color: '#00ff88' }}>📱 QR Code Scanner</h3>
+      
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+        <button 
+          onClick={isScanning ? stopScanning : startScanning}
+          style={{
+            background: isScanning ? '#ff4444' : '#00ff88',
+            color: '#000',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          {isScanning ? '🛑 Stop Scanner' : '📷 Start Scanner'}
+        </button>
+        
+        <span style={{ color: '#a0a0a0' }}>
+          {isScanning ? '🔍 Scanning for QR codes...' : 'Click to scan APK deployment QR codes'}
+        </span>
+      </div>
+
+      {isScanning && (
+        <div style={{ 
+          position: 'relative', 
+          width: '100%', 
+          maxWidth: '400px',
+          margin: '0 auto',
+          background: '#001100',
+          border: '2px solid #00ff88',
+          borderRadius: '10px',
+          padding: '10px'
+        }}>
+          <video 
+            ref={videoRef}
+            style={{ 
+              width: '100%', 
+              height: 'auto',
+              borderRadius: '5px'
+            }}
+            playsInline
+            muted
+          />
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            border: '2px solid #00ff88',
+            width: '200px',
+            height: '200px',
+            borderRadius: '10px',
+            pointerEvents: 'none'
+          }} />
+        </div>
+      )}
+
+      {scannedData && (
+        <div style={{ 
+          background: '#001100', 
+          border: '1px solid #00ff88', 
+          padding: '10px',
+          marginTop: '1rem',
+          borderRadius: '5px'
+        }}>
+          <h4 style={{ color: '#00ff88', margin: '0 0 10px 0' }}>✅ QR Code Detected:</h4>
+          <pre style={{ 
+            color: '#ffffff', 
+            fontSize: '12px',
+            wordWrap: 'break-word',
+            whiteSpace: 'pre-wrap'
+          }}>
+            {JSON.stringify(scannedData, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <div style={{ 
+        background: '#001100', 
+        border: '1px solid #555', 
+        padding: '10px',
+        marginTop: '1rem',
+        borderRadius: '5px',
+        fontSize: '14px'
+      }}>
+        <h4 style={{ color: '#ffaa00', margin: '0 0 10px 0' }}>💡 Instructions:</h4>
+        <ul style={{ color: '#a0a0a0', margin: 0, paddingLeft: '20px' }}>
+          <li>Point camera at the QR code from /spectra.apk page</li>
+          <li>Keep QR code centered in the green frame</li>
+          <li>Scanner will automatically detect and process the code</li>
+          <li>APK download will start automatically</li>
+        </ul>
       </div>
     </div>
   );
