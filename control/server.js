@@ -678,9 +678,9 @@ app.get('/download/:filename', (req, res) => {
     }
 });
 
-// Página principal
+// Página principal - serve o React dashboard
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'dash', 'index.html'));
 });
 
 // React dashboard routes
