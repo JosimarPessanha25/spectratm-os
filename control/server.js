@@ -477,7 +477,7 @@ app.get('/api/pair-device', (req, res) => {
         type: 'pair',
         token: token,
         created: Date.now(),
-        expires: Date.now() + (30 * 60 * 1000), // 30 minutes to pair
+        expires: Date.now() + (5 * 60 * 1000), // 5 minutes to pair
         connected: false
     });
     

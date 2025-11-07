@@ -14,7 +14,7 @@ public class DeviceConstants {
     
     // URLs DO SERVIDOR (atualizadas pelo deploy)
     public static final String SERVER_URL_LOCAL = "ws://localhost:8000/live";
-    public static final String SERVER_URL_RENDER = "wss://sp-gate.onrender.com/live";
+    public static final String SERVER_URL_RENDER = "wss://spectratm-os.onrender.com/live";
     
     // CONFIGURAÇÕES DE SEGURANÇA
     public static final int KEY_ROTATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
