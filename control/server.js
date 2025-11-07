@@ -53,6 +53,29 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Status endpoint for debugging
+app.get('/status', (req, res) => {
+    const apkPath = path.join(__dirname, 'public', 'spectra.apk');
+    const apkExists = fs.existsSync(apkPath);
+    const apkSize = apkExists ? fs.statSync(apkPath).size : 0;
+    
+    res.json({
+        status: 'SpectraTM Server Online',
+        timestamp: new Date().toISOString(),
+        version: 'v2.0-qr',
+        apk: {
+            exists: apkExists,
+            size: apkSize,
+            path: apkPath
+        },
+        features: {
+            qr_scanner: true,
+            dashboard: true,
+            websocket: true
+        }
+    });
+});
+
 // APK Download endpoint with fallback
 app.get('/spectra.apk', async (req, res) => {
     console.log('🔍 APK endpoint called from:', req.ip, req.get('User-Agent'));
