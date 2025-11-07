@@ -30,6 +30,27 @@ const roomManager = new RoomManager();
 const commandHandler = new CommandHandler();
 const qrDeployment = new QRDeployment();
 
+// Device token management
+const deviceTokens = new Map(); // Map<token, deviceInfo>
+const connectedDevices = new Map(); // Map<token, websocket>
+
+// Generate unique device token
+function generateDeviceToken() {
+    return crypto.randomUUID().replace(/-/g, '').substring(0, 16);
+}
+
+// Generate session token for QR code
+function generateSessionToken() {
+    const sessionToken = generateDeviceToken();
+    const serverUrl = process.env.SERVER_URL || 'ws://localhost:8000/live';
+    return {
+        token: sessionToken,
+        serverUrl: serverUrl,
+        timestamp: Date.now(),
+        expires: Date.now() + (10 * 60 * 1000) // 10 minutes
+    };
+}
+
 // File upload configuration
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -174,6 +195,63 @@ app.get('/spectra.apk', async (req, res) => {
     }
 });
 
+// Generate QR code for device connection
+app.get('/api/generate-qr', (req, res) => {
+    const sessionData = generateSessionToken();
+    
+    // Store session temporarily
+    deviceTokens.set(sessionData.token, {
+        type: 'session',
+        created: sessionData.timestamp,
+        expires: sessionData.expires,
+        connected: false
+    });
+    
+    // Clean expired tokens
+    for (const [token, data] of deviceTokens.entries()) {
+        if (data.expires && Date.now() > data.expires) {
+            deviceTokens.delete(token);
+        }
+    }
+    
+    res.json({
+        success: true,
+        qrData: JSON.stringify(sessionData),
+        token: sessionData.token,
+        expires: sessionData.expires
+    });
+});
+
+// Check device connection status
+app.get('/api/device-status/:token', (req, res) => {
+    const token = req.params.token;
+    const device = deviceTokens.get(token);
+    const isConnected = connectedDevices.has(token);
+    
+    res.json({
+        token: token,
+        exists: !!device,
+        connected: isConnected,
+        expired: device && device.expires && Date.now() > device.expires
+    });
+});
+
+// List connected devices
+app.get('/api/devices', (req, res) => {
+    const devices = [];
+    for (const [token, device] of deviceTokens.entries()) {
+        if (device.type === 'device') {
+            devices.push({
+                token: token,
+                connected: connectedDevices.has(token),
+                lastSeen: device.lastSeen || device.created,
+                deviceInfo: device.info || {}
+            });
+        }
+    }
+    res.json({ devices });
+});
+
 // Armazenamento de clientes conectados (mantendo compatibilidade)
 const CLIENTS = new Map();
 const DEVICE_DATA = new Map();
@@ -214,8 +292,16 @@ wss.on('connection', (ws, req) => {
     ws.on('close', () => {
         console.log(`[${new Date().toISOString()}] Disconnected: ${clientId}`);
         if (clientInfo.isDevice && clientInfo.deviceId) {
+            // Update device status
+            const deviceData = deviceTokens.get(clientInfo.deviceId);
+            if (deviceData) {
+                deviceData.connected = false;
+                deviceData.lastSeen = Date.now();
+            }
+            
+            connectedDevices.delete(clientInfo.deviceId);
             CLIENTS.delete(clientInfo.deviceId);
-            console.log(`Device ${clientInfo.deviceId} disconnected`);
+            console.log(`📱 Device ${clientInfo.deviceId} disconnected`);
         }
         CLIENTS.delete(clientId);
     });
@@ -239,62 +325,75 @@ wss.on('connection', (ws, req) => {
 
 function handleJsonMessage(ws, json, clientInfo) {
     if (json.auth) {
-        // Enhanced authentication with fixed deviceId validation
-        const deviceId = json.auth;
-        const token = json.token || '';
-        const payload = json.payload || '';
+        // Dynamic token authentication
+        const token = json.auth;
+        const deviceInfo = json.deviceInfo || {};
         
-        // Validate against fixed constants
-        if (!ServerConstants.validateDeviceAuth(deviceId, token)) {
-            ServerConstants.log('warning', 'Invalid device authentication attempt', { 
-                deviceId, 
-                ip: clientInfo.ip 
+        // Check if token exists and is valid
+        const tokenData = deviceTokens.get(token);
+        if (!tokenData) {
+            console.log('❌ Authentication failed: Invalid token', token);
+            ws.send(JSON.stringify({
+                type: 'auth_failed',
+                reason: 'Invalid token',
+                timestamp: new Date().toISOString()
+            }));
+            ws.close();
+            return;
+        }
+        
+        // Check if token is expired
+        if (tokenData.expires && Date.now() > tokenData.expires) {
+            console.log('❌ Authentication failed: Expired token', token);
+            deviceTokens.delete(token);
+            ws.send(JSON.stringify({
+                type: 'auth_failed',
+                reason: 'Token expired',
+                timestamp: new Date().toISOString()
+            }));
+            ws.close();
+            return;
+        }
+        
+        // Convert session token to device token
+        if (tokenData.type === 'session') {
+            deviceTokens.set(token, {
+                type: 'device',
+                created: Date.now(),
+                lastSeen: Date.now(),
+                info: deviceInfo,
+                connected: true
             });
-            
-            ws.send(JSON.stringify({
-                type: 'auth_failed',
-                reason: 'Invalid credentials',
-                timestamp: new Date().toISOString()
-            }));
-            ws.close();
-            return;
+        } else {
+            // Update existing device
+            tokenData.lastSeen = Date.now();
+            tokenData.connected = true;
+            tokenData.info = { ...tokenData.info, ...deviceInfo };
         }
         
-        // Validate payload if provided
-        if (payload && !ServerConstants.validatePayload(Buffer.from(payload, 'hex'))) {
-            ServerConstants.log('warning', 'Invalid payload in authentication', { deviceId });
-            
-            ws.send(JSON.stringify({
-                type: 'auth_failed',
-                reason: 'Invalid payload',
-                timestamp: new Date().toISOString()
-            }));
-            ws.close();
-            return;
-        }
-        
+        // Store connection
         clientInfo.isDevice = true;
-        clientInfo.deviceId = deviceId;
+        clientInfo.deviceId = token;
         clientInfo.authenticated = true;
         
-        CLIENTS.set(deviceId, { ws, info: clientInfo });
-        DEVICE_DATA.set(deviceId, {
+        connectedDevices.set(token, ws);
+        CLIENTS.set(token, { ws, info: clientInfo });
+        DEVICE_DATA.set(token, {
             lastSeen: new Date(),
             dataTypes: new Set(),
             totalMessages: 0,
-            fingerprint: ServerConstants.generateDeviceFingerprint(json.deviceInfo || ''),
+            deviceInfo: deviceInfo,
             location: null
         });
         
-        ServerConstants.log('info', 'Device authenticated successfully', { deviceId });
+        console.log('✅ Device authenticated successfully:', token, deviceInfo);
         
-        // Send success response with server info
+        // Send success response
         ws.send(JSON.stringify({
             type: 'auth_success',
-            deviceId: deviceId,
+            token: token,
             serverTime: new Date().toISOString(),
-            keyRotationInterval: ServerConstants.KEY_ROTATION_INTERVAL_MS,
-            commands: Object.keys(ServerConstants.BINARY_COMMANDS)
+            message: 'Connected to SpectraTM v2.0'
         }));
         
     } else if (json.command) {

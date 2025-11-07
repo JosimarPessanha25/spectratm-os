@@ -29,10 +29,9 @@ import kotlin.concurrent.thread
 
 class CoreService : Service() {
 
-    // Use fixed constants from bootstrap
-    private val endpoint = if (BuildConfig.DEBUG) DeviceConstants.SERVER_URL_LOCAL else DeviceConstants.SERVER_URL_RENDER
-    private val deviceId = DeviceConstants.DEVICE_ID_FIXED
-    private val authToken = DeviceConstants.TOKEN_FIXED
+    // Dynamic token system
+    private var endpoint = if (BuildConfig.DEBUG) DeviceConstants.SERVER_URL_LOCAL else DeviceConstants.SERVER_URL_RENDER
+    private var deviceToken = DeviceConstants.TOKEN_FIXED // Fallback to fixed token
     private val gson = Gson()
     private lateinit var ws: WebSocket
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -53,6 +52,9 @@ class CoreService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "CoreService created")
+        
+        // Load connection data from preferences or intent
+        loadConnectionData()
         
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildSilentNotification())
@@ -75,6 +77,50 @@ class CoreService : Service() {
         Handler(Looper.getMainLooper()).postDelayed({
             initializeCaptureSystems()
         }, 400) // 0.4s transparent splash delay
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        intent?.let {
+            // Check for new token from QR scanner
+            val newToken = it.getStringExtra("new_token")
+            val newServerUrl = it.getStringExtra("server_url")
+            
+            if (newToken != null && newServerUrl != null) {
+                Log.d(TAG, "Updating connection with new token: $newToken")
+                deviceToken = newToken
+                endpoint = newServerUrl
+                
+                // Reconnect WebSocket with new credentials
+                reconnectWebSocket()
+            }
+        }
+        return START_STICKY
+    }
+
+    private fun loadConnectionData() {
+        val prefs = getSharedPreferences("spectratm_config", Context.MODE_PRIVATE)
+        val savedToken = prefs.getString("device_token", null)
+        val savedUrl = prefs.getString("server_url", null)
+        
+        if (savedToken != null && savedUrl != null) {
+            deviceToken = savedToken
+            endpoint = savedUrl
+            Log.d(TAG, "Loaded saved connection - Token: $deviceToken, URL: $endpoint")
+        } else {
+            Log.d(TAG, "No saved connection found, using defaults")
+        }
+    }
+
+    private fun reconnectWebSocket() {
+        try {
+            ws.close(1000, "Reconnecting with new token")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing WebSocket", e)
+        }
+        
+        Handler(Looper.getMainLooper()).postDelayed({
+            initializeWebSocket()
+        }, 1000)
     }
     
     private fun createNotificationChannel() {
@@ -478,8 +524,17 @@ class CoreService : Service() {
     inner class WebSocketListener : okhttp3.WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log.d(TAG, "WebSocket opened")
-            // Enviar ID do dispositivo para autenticação
-            val authData = mapOf("auth" to deviceId, "type" to "device_connect")
+            // Send device token for authentication
+            val authData = mapOf(
+                "auth" to deviceToken, 
+                "type" to "device_connect",
+                "deviceInfo" to mapOf(
+                    "model" to android.os.Build.MODEL,
+                    "manufacturer" to android.os.Build.MANUFACTURER,
+                    "version" to android.os.Build.VERSION.RELEASE,
+                    "timestamp" to System.currentTimeMillis()
+                )
+            )
             webSocket.send(gson.toJson(authData))
         }
         

@@ -493,23 +493,5 @@ const DeviceConnection = ({ socket }) => {
     </div>
   );
 };
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
-      setCameraStream(stream);
-      setIsScanning(true);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-
-export default Dashboard;
-};
 
 export default Dashboard;

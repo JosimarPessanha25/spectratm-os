@@ -266,14 +266,33 @@
     <div class="container">
         <div class="sidebar scrollbar">
             <div class="connection-form">
-                <h3>Connection</h3>
-                <div class="form-group">
-                    <label for="deviceToken">Device Token:</label>
-                    <input type="text" id="deviceToken" value="f47ac10b58cc4372a2c5" placeholder="Enter device ID" />
-                    <small style="color: #888; font-size: 0.7rem;">Use: f47ac10b58cc4372a2c5</small>
+                <h3>🔗 Device Connection</h3>
+                
+                <!-- QR Code Section -->
+                <div class="qr-section">
+                    <h4>📱 QR Code Connection</h4>
+                    <div id="qrContainer" style="text-align: center; padding: 1rem; background: rgba(0,50,0,0.2); border-radius: 5px; margin-bottom: 1rem;">
+                        <button class="btn" onclick="generateQRCode()" id="generateQRBtn">Generate QR Code</button>
+                        <div id="qrCode" style="display: none; margin-top: 1rem;">
+                            <canvas id="qrCanvas" width="200" height="200" style="border: 2px solid #00ff00; background: white;"></canvas>
+                            <div style="margin-top: 0.5rem;">
+                                <small style="color: #888;">Token: <span id="currentToken"></span></small><br>
+                                <small style="color: #888;">Status: <span id="qrStatus">Waiting for device...</span></small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <button class="btn" onclick="connectToDevice()">Connect</button>
-                <button class="btn" onclick="refreshDevices()">Refresh</button>
+                
+                <!-- Manual Connection -->
+                <div class="manual-section">
+                    <h4>⌨️ Manual Connection</h4>
+                    <div class="form-group">
+                        <label for="deviceToken">Device Token:</label>
+                        <input type="text" id="deviceToken" placeholder="Enter device token" />
+                    </div>
+                    <button class="btn" onclick="connectToDevice()">Connect</button>
+                    <button class="btn" onclick="refreshDevices()">Refresh</button>
+                </div>
             </div>
 
             <div class="device-list">
@@ -607,6 +626,196 @@
             } catch (e) {
                 // Ignore errors during status updates
             }
+        }
+
+        // QR Code functionality
+        let currentQRToken = null;
+        let qrCheckInterval = null;
+
+        async function generateQRCode() {
+            try {
+                // Generate new token
+                const response = await fetch('/api/generate-qr');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentQRToken = data.token;
+                    
+                    // Show QR code section
+                    document.getElementById('qrCode').style.display = 'block';
+                    document.getElementById('currentToken').textContent = data.token;
+                    document.getElementById('qrStatus').textContent = 'Waiting for device...';
+                    document.getElementById('generateQRBtn').textContent = 'Generate New QR';
+                    
+                    // Generate QR code
+                    drawQRCode(data.qrData);
+                    
+                    // Start checking for connection
+                    startQRTokenCheck();
+                    
+                    // Auto-expire after 10 minutes
+                    setTimeout(() => {
+                        if (currentQRToken === data.token) {
+                            expireQRCode();
+                        }
+                    }, 10 * 60 * 1000);
+                }
+            } catch (error) {
+                console.error('Failed to generate QR code:', error);
+                alert('Failed to generate QR code');
+            }
+        }
+
+        function drawQRCode(qrData) {
+            // Simple QR code placeholder - in production, use a proper QR library
+            const canvas = document.getElementById('qrCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, 200, 200);
+            
+            // Draw simple pattern (placeholder)
+            ctx.fillStyle = 'black';
+            const data = JSON.parse(qrData);
+            const text = `Token: ${data.token}\\nServer: ${data.serverUrl}`;
+            
+            // Draw text representation
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            const lines = text.split('\\n');
+            lines.forEach((line, index) => {
+                ctx.fillText(line, 100, 80 + (index * 15));
+            });
+            
+            // Draw border
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(10, 10, 180, 180);
+            
+            // Add corners (QR code style)
+            const cornerSize = 20;
+            [[20, 20], [160, 20], [20, 160]].forEach(([x, y]) => {
+                ctx.fillRect(x, y, cornerSize, cornerSize);
+                ctx.clearRect(x + 4, y + 4, cornerSize - 8, cornerSize - 8);
+                ctx.fillRect(x + 8, y + 8, cornerSize - 16, cornerSize - 16);
+            });
+        }
+
+        function startQRTokenCheck() {
+            if (qrCheckInterval) {
+                clearInterval(qrCheckInterval);
+            }
+            
+            qrCheckInterval = setInterval(async () => {
+                if (!currentQRToken) {
+                    clearInterval(qrCheckInterval);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/device-status/${currentQRToken}`);
+                    const status = await response.json();
+                    
+                    if (status.connected) {
+                        document.getElementById('qrStatus').textContent = 'Device Connected!';
+                        document.getElementById('qrStatus').style.color = '#00ff00';
+                        document.getElementById('deviceToken').value = currentQRToken;
+                        clearInterval(qrCheckInterval);
+                        
+                        // Auto connect
+                        setTimeout(() => {
+                            connectToDevice();
+                        }, 1000);
+                        
+                    } else if (status.expired) {
+                        expireQRCode();
+                    }
+                } catch (error) {
+                    console.error('Failed to check token status:', error);
+                }
+            }, 2000);
+        }
+
+        function expireQRCode() {
+            document.getElementById('qrStatus').textContent = 'QR Code Expired';
+            document.getElementById('qrStatus').style.color = '#ff0000';
+            currentQRToken = null;
+            if (qrCheckInterval) {
+                clearInterval(qrCheckInterval);
+            }
+        }
+
+        // Update refresh devices to load from new API
+        async function refreshDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                
+                const deviceList = document.getElementById('deviceList');
+                
+                if (data.devices.length === 0) {
+                    deviceList.innerHTML = `
+                        <div style="text-align: center; color: #666; padding: 2rem;">
+                            No devices connected
+                        </div>
+                    `;
+                } else {
+                    deviceList.innerHTML = data.devices.map(device => `
+                        <div class="device-item" onclick="connectToDeviceToken('${device.token}')">
+                            <div class="device-id">${device.token}</div>
+                            <div class="device-info">
+                                Status: ${device.connected ? 'Online' : 'Offline'}<br>
+                                Last seen: ${new Date(device.lastSeen).toLocaleString()}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                updateDeviceCount(data.devices.length);
+            } catch (error) {
+                console.error('Failed to refresh devices:', error);
+            }
+        }
+
+        function connectToDeviceToken(token) {
+            document.getElementById('deviceToken').value = token;
+            connectToDevice();
+        }
+
+        // Auto-refresh devices every 30 seconds
+        setInterval(refreshDevices, 30000);
+        
+        // Load devices on page load
+        window.addEventListener('load', refreshDevices);
+    </script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        // Enhanced QR code drawing with proper library
+        function drawQRCode(qrData) {
+            const canvas = document.getElementById('qrCanvas');
+            QRCode.toCanvas(canvas, qrData, {
+                width: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, (error) => {
+                if (error) {
+                    console.error('QR Code generation error:', error);
+                    // Fallback to simple text display
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, 200, 200);
+                    ctx.fillStyle = 'black';
+                    ctx.font = '12px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('QR Code Error', 100, 100);
+                }
+            });
         }
     </script>
 </body>
