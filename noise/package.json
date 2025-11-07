@@ -1,0 +1,16 @@
+{
+  "name": "spectratm-noise",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Noise_KK encryption key generator for SpectraTM",
+  "main": "keygen.js",
+  "scripts": {
+    "keygen": "node keygen.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "^0.7.13",
+    "uuid": "^9.0.1"
+  }
+}

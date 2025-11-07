@@ -1,0 +1,65 @@
+name: Build and Deploy SpectraTM
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      
+    - name: Generate keystore
+      run: |
+        keytool -genkey -v -keystore spectra.jks \
+          -alias spectra -keyalg RSA -keysize 2048 -validity 9125 \
+          -storepass spec2024 -keypass spec2024 \
+          -dname "CN=SpectraTM, OU=Spectra, O=Spectra, L=Global, S=Cyber, C=XX"
+          
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
+      
+    - name: Build APK
+      run: |
+        cd android
+        ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=../spectra.jks \
+          -Pandroid.injected.signing.store.password=spec2024 \
+          -Pandroid.injected.signing.key.alias=spectra \
+          -Pandroid.injected.signing.key.password=spec2024 \
+          --no-daemon
+          
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: spectra-apk
+        path: android/app/build/outputs/apk/release/app-release.apk
+        
+    - name: Copy APK to control directory
+      run: |
+        mkdir -p control/public
+        cp android/app/build/outputs/apk/release/app-release.apk control/public/spectra.apk
+        
+    - name: Commit APK to repo
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add control/public/spectra.apk
+        git diff --staged --quiet || git commit -m "Update APK build [skip ci]"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

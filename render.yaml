@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: spectratm-os
+    env: node
+    buildCommand: cd control && npm install && npm run build
+    startCommand: cd control && npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEVICE_ID
+        value: f47ac10b58cc4372a2c5
+      - key: TOKEN
+        value: spec2024
+      - key: PORT
+        value: 10000
+      - key: RENDER_WEBSOCKET
+        value: "true"
+    healthCheckPath: /health

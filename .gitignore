@@ -1,0 +1,39 @@
+# SpectraTM
+*.keystore
+*.jks
+local.properties
+.gradle/
+build/
+captures/
+.externalNativeBuild
+.cxx
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Keys
+*-keys.json
+*.pem
+*.key
+
+# Logs  
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
