@@ -1,5 +1,5 @@
 // SpectraTM Server Constants - Gerado pelo bootstrap.sh
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 class ServerConstants {
     
@@ -169,4 +169,4 @@ class ServerConstants {
     }
 }
 
-module.exports = ServerConstants;
+export default ServerConstants;
