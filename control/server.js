@@ -1,3 +1,4 @@
+// SpectraTM v2.0 Server - Updated with QR Scanner support
 import express from 'express';
 import http from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
@@ -54,14 +55,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // APK Download endpoint with fallback
 app.get('/spectra.apk', async (req, res) => {
+    console.log('🔍 APK endpoint called from:', req.ip, req.get('User-Agent'));
     const apkPath = path.join(__dirname, 'public', 'spectra.apk');
+    console.log('📁 Checking APK at:', apkPath);
+    
+    const apkExists = fs.existsSync(apkPath);
+    const apkSize = apkExists ? fs.statSync(apkPath).size : 0;
+    console.log('📱 APK Status:', { exists: apkExists, size: apkSize });
     
     // Check if local APK exists and has reasonable size
-    if (fs.existsSync(apkPath) && fs.statSync(apkPath).size > 1024 * 100) { // At least 100KB
+    if (apkExists && apkSize > 1024 * 100) { // At least 100KB
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.setHeader('Content-Disposition', 'attachment; filename=spectra.apk');
+        console.log('✅ Sending APK file');
         res.sendFile(apkPath);
     } else {
+        console.log('⚠️ APK not available, generating fallback page');
         // Generate QR deployment as fallback
         try {
             const deployment = await qrDeployment.generateDeploymentQR('v2.0', {
