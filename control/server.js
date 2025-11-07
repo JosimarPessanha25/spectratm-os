@@ -924,6 +924,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Rota /live - serve o painel de controle HTML
+app.get('/live', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // React dashboard routes
 app.get('/dashboard*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dash', 'index.html'));
