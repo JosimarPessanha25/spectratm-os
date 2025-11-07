@@ -266,32 +266,48 @@
     <div class="container">
         <div class="sidebar scrollbar">
             <div class="connection-form">
-                <h3>🔗 Device Connection</h3>
+                <h3>� Pair Device</h3>
                 
-                <!-- QR Code Section -->
-                <div class="qr-section">
-                    <h4>📱 QR Code Connection</h4>
-                    <div id="qrContainer" style="text-align: center; padding: 1rem; background: rgba(0,50,0,0.2); border-radius: 5px; margin-bottom: 1rem;">
-                        <button class="btn" onclick="generateQRCode()" id="generateQRBtn">Generate QR Code</button>
-                        <div id="qrCode" style="display: none; margin-top: 1rem;">
-                            <canvas id="qrCanvas" width="200" height="200" style="border: 2px solid #00ff00; background: white;"></canvas>
-                            <div style="margin-top: 0.5rem;">
-                                <small style="color: #888;">Token: <span id="currentToken"></span></small><br>
-                                <small style="color: #888;">Status: <span id="qrStatus">Waiting for device...</span></small>
+                <!-- Device Pairing Section -->
+                <div class="pair-section">
+                    <div id="pairContainer" style="text-align: center; padding: 1rem; background: rgba(0,50,0,0.2); border-radius: 5px; margin-bottom: 1rem;">
+                        <button class="btn" onclick="generateDevicePair()" id="pairDeviceBtn">Pair Device</button>
+                        
+                        <div id="devicePairInfo" style="display: none; margin-top: 1rem; text-align: left;">
+                            <div style="background: #001100; padding: 10px; border: 1px solid #00ff00; border-radius: 5px;">
+                                <div style="margin-bottom: 10px;">
+                                    <strong style="color: #00ff00;">Device ID:</strong> 
+                                    <span id="deviceId" style="font-family: monospace; color: #fff;"></span>
+                                    <button onclick="copyToClipboard('deviceId')" style="margin-left: 10px; padding: 2px 8px; font-size: 10px;">Copy</button>
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <strong style="color: #00ff00;">Token:</strong> 
+                                    <span id="deviceToken" style="font-family: monospace; color: #fff;"></span>
+                                    <button onclick="copyToClipboard('deviceToken')" style="margin-left: 10px; padding: 2px 8px; font-size: 10px;">Copy</button>
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <strong style="color: #00ff00;">Server URL:</strong><br>
+                                    <span style="font-family: monospace; color: #fff; font-size: 12px;">https://spectratm-os.onrender.com/live</span>
+                                    <button onclick="copyToClipboard('serverUrl')" style="margin-left: 10px; padding: 2px 8px; font-size: 10px;">Copy</button>
+                                </div>
+                                <div style="color: #ffaa00; font-size: 12px; margin-top: 10px;">
+                                    💡 Enter these exact values in your Android app
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 10px; text-align: center;">
+                                <div style="color: #888; font-size: 12px;">Status: <span id="pairStatus">Waiting for device connection...</span></div>
+                                <button class="btn" onclick="checkDeviceStatus()" style="margin-top: 10px; font-size: 12px;">Check Status</button>
                             </div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Manual Connection -->
-                <div class="manual-section">
-                    <h4>⌨️ Manual Connection</h4>
-                    <div class="form-group">
-                        <label for="deviceToken">Device Token:</label>
-                        <input type="text" id="deviceToken" placeholder="Enter device token" />
-                    </div>
-                    <button class="btn" onclick="connectToDevice()">Connect</button>
-                    <button class="btn" onclick="refreshDevices()">Refresh</button>
+                <div class="manual-section" style="margin-top: 20px;">
+                    <h4>🔄 Quick Actions</h4>
+                    <button class="btn" onclick="refreshDevices()">Refresh Devices</button>
+                    <button class="btn" onclick="downloadAPK()">Download APK</button>
                 </div>
             </div>
 
@@ -628,122 +644,130 @@
             }
         }
 
-        // QR Code functionality
-        let currentQRToken = null;
-        let qrCheckInterval = null;
+        // Device Pairing functionality
+        let currentDeviceId = null;
+        let currentToken = null;
+        let pairCheckInterval = null;
 
-        async function generateQRCode() {
+        async function generateDevicePair() {
             try {
-                // Generate new token
-                const response = await fetch('/api/generate-qr');
+                // Generate device pairing
+                const response = await fetch('/api/pair-device');
                 const data = await response.json();
                 
                 if (data.success) {
-                    currentQRToken = data.token;
+                    currentDeviceId = data.deviceId;
+                    currentToken = data.token;
                     
-                    // Show QR code section
-                    document.getElementById('qrCode').style.display = 'block';
-                    document.getElementById('currentToken').textContent = data.token;
-                    document.getElementById('qrStatus').textContent = 'Waiting for device...';
-                    document.getElementById('generateQRBtn').textContent = 'Generate New QR';
-                    
-                    // Generate QR code
-                    drawQRCode(data.qrData);
+                    // Show pairing info
+                    document.getElementById('devicePairInfo').style.display = 'block';
+                    document.getElementById('deviceId').textContent = data.deviceId;
+                    document.getElementById('deviceToken').textContent = data.token;
+                    document.getElementById('pairStatus').textContent = 'Waiting for device connection...';
+                    document.getElementById('pairDeviceBtn').textContent = 'Generate New Pair';
                     
                     // Start checking for connection
-                    startQRTokenCheck();
+                    startPairCheck();
                     
-                    // Auto-expire after 10 minutes
-                    setTimeout(() => {
-                        if (currentQRToken === data.token) {
-                            expireQRCode();
-                        }
-                    }, 10 * 60 * 1000);
+                    console.log('Device Pair Generated:', { deviceId: data.deviceId, token: data.token });
                 }
             } catch (error) {
-                console.error('Failed to generate QR code:', error);
-                alert('Failed to generate QR code');
+                console.error('Failed to generate device pair:', error);
+                alert('Failed to generate device pair');
             }
         }
 
-        function drawQRCode(qrData) {
-            // Simple QR code placeholder - in production, use a proper QR library
-            const canvas = document.getElementById('qrCanvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Clear canvas
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, 200, 200);
-            
-            // Draw simple pattern (placeholder)
-            ctx.fillStyle = 'black';
-            const data = JSON.parse(qrData);
-            const text = `Token: ${data.token}\\nServer: ${data.serverUrl}`;
-            
-            // Draw text representation
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'center';
-            const lines = text.split('\\n');
-            lines.forEach((line, index) => {
-                ctx.fillText(line, 100, 80 + (index * 15));
-            });
-            
-            // Draw border
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(10, 10, 180, 180);
-            
-            // Add corners (QR code style)
-            const cornerSize = 20;
-            [[20, 20], [160, 20], [20, 160]].forEach(([x, y]) => {
-                ctx.fillRect(x, y, cornerSize, cornerSize);
-                ctx.clearRect(x + 4, y + 4, cornerSize - 8, cornerSize - 8);
-                ctx.fillRect(x + 8, y + 8, cornerSize - 16, cornerSize - 16);
-            });
-        }
-
-        function startQRTokenCheck() {
-            if (qrCheckInterval) {
-                clearInterval(qrCheckInterval);
+        function copyToClipboard(elementId) {
+            let text = '';
+            if (elementId === 'deviceId') {
+                text = currentDeviceId;
+            } else if (elementId === 'deviceToken') {
+                text = currentToken;
+            } else if (elementId === 'serverUrl') {
+                text = 'https://spectratm-os.onrender.com/live';
             }
             
-            qrCheckInterval = setInterval(async () => {
-                if (!currentQRToken) {
-                    clearInterval(qrCheckInterval);
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    // Show brief feedback
+                    const originalText = document.getElementById(elementId).textContent;
+                    document.getElementById(elementId).textContent = 'Copied!';
+                    setTimeout(() => {
+                        document.getElementById(elementId).textContent = originalText;
+                    }, 1000);
+                });
+            }
+        }
+
+
+
+        function startPairCheck() {
+            if (pairCheckInterval) {
+                clearInterval(pairCheckInterval);
+            }
+            
+            pairCheckInterval = setInterval(async () => {
+                if (!currentDeviceId || !currentToken) {
+                    clearInterval(pairCheckInterval);
                     return;
                 }
                 
                 try {
-                    const response = await fetch(`/api/device-status/${currentQRToken}`);
+                    const response = await fetch(`/api/device-status/${currentDeviceId}/${currentToken}`);
                     const status = await response.json();
                     
                     if (status.connected) {
-                        document.getElementById('qrStatus').textContent = 'Device Connected!';
-                        document.getElementById('qrStatus').style.color = '#00ff00';
-                        document.getElementById('deviceToken').value = currentQRToken;
-                        clearInterval(qrCheckInterval);
+                        document.getElementById('pairStatus').textContent = '✅ Device Connected!';
+                        document.getElementById('pairStatus').style.color = '#00ff00';
+                        clearInterval(pairCheckInterval);
                         
-                        // Auto connect
-                        setTimeout(() => {
-                            connectToDevice();
-                        }, 1000);
+                        // Update device count and refresh
+                        refreshDevices();
                         
                     } else if (status.expired) {
-                        expireQRCode();
+                        expirePair();
                     }
                 } catch (error) {
-                    console.error('Failed to check token status:', error);
+                    console.error('Failed to check device status:', error);
                 }
             }, 2000);
         }
 
-        function expireQRCode() {
-            document.getElementById('qrStatus').textContent = 'QR Code Expired';
-            document.getElementById('qrStatus').style.color = '#ff0000';
-            currentQRToken = null;
-            if (qrCheckInterval) {
-                clearInterval(qrCheckInterval);
+        async function checkDeviceStatus() {
+            if (!currentDeviceId || !currentToken) {
+                alert('No device pair generated yet');
+                return;
             }
+            
+            try {
+                const response = await fetch(`/api/device-status/${currentDeviceId}/${currentToken}`);
+                const status = await response.json();
+                
+                if (status.connected) {
+                    document.getElementById('pairStatus').textContent = '✅ Device Connected!';
+                    document.getElementById('pairStatus').style.color = '#00ff00';
+                } else {
+                    document.getElementById('pairStatus').textContent = '⏳ Still waiting...';
+                    document.getElementById('pairStatus').style.color = '#ffaa00';
+                }
+            } catch (error) {
+                document.getElementById('pairStatus').textContent = '❌ Check failed';
+                document.getElementById('pairStatus').style.color = '#ff0000';
+            }
+        }
+
+        function expirePair() {
+            document.getElementById('pairStatus').textContent = '❌ Pair Expired';
+            document.getElementById('pairStatus').style.color = '#ff0000';
+            currentDeviceId = null;
+            currentToken = null;
+            if (pairCheckInterval) {
+                clearInterval(pairCheckInterval);
+            }
+        }
+
+        function downloadAPK() {
+            window.location.href = '/spectra.apk';
         }
 
         // Update refresh devices to load from new API

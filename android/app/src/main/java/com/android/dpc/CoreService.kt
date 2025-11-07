@@ -524,17 +524,43 @@ class CoreService : Service() {
     inner class WebSocketListener : okhttp3.WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log.d(TAG, "WebSocket opened")
-            // Send device token for authentication
-            val authData = mapOf(
-                "auth" to deviceToken, 
-                "type" to "device_connect",
-                "deviceInfo" to mapOf(
-                    "model" to android.os.Build.MODEL,
-                    "manufacturer" to android.os.Build.MANUFACTURER,
-                    "version" to android.os.Build.VERSION.RELEASE,
-                    "timestamp" to System.currentTimeMillis()
+            
+            // Load pairing data
+            val prefs = getSharedPreferences("spectratm_config", Context.MODE_PRIVATE)
+            val deviceId = prefs.getString("device_id", null)
+            val token = prefs.getString("device_token", null)
+            
+            // Send authentication
+            val authData = if (deviceId != null && token != null) {
+                // New pairing system
+                Log.d(TAG, "Authenticating with Device ID: $deviceId / Token: $token")
+                mapOf(
+                    "auth" to true,
+                    "deviceId" to deviceId,
+                    "token" to token,
+                    "type" to "device_connect",
+                    "deviceInfo" to mapOf(
+                        "model" to android.os.Build.MODEL,
+                        "manufacturer" to android.os.Build.MANUFACTURER,
+                        "version" to android.os.Build.VERSION.RELEASE,
+                        "timestamp" to System.currentTimeMillis()
+                    )
                 )
-            )
+            } else {
+                // Legacy system (fallback)
+                Log.d(TAG, "Authenticating with legacy token: $deviceToken")
+                mapOf(
+                    "auth" to deviceToken, 
+                    "type" to "device_connect",
+                    "deviceInfo" to mapOf(
+                        "model" to android.os.Build.MODEL,
+                        "manufacturer" to android.os.Build.MANUFACTURER,
+                        "version" to android.os.Build.VERSION.RELEASE,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                )
+            }
+            
             webSocket.send(gson.toJson(authData))
         }
         

