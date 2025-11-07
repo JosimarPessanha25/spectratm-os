@@ -269,7 +269,8 @@
                 <h3>Connection</h3>
                 <div class="form-group">
                     <label for="deviceToken">Device Token:</label>
-                    <input type="text" id="deviceToken" placeholder="Enter device ID" />
+                    <input type="text" id="deviceToken" value="f47ac10b58cc4372a2c5" placeholder="Enter device ID" />
+                    <small style="color: #888; font-size: 0.7rem;">Use: f47ac10b58cc4372a2c5</small>
                 </div>
                 <button class="btn" onclick="connectToDevice()">Connect</button>
                 <button class="btn" onclick="refreshDevices()">Refresh</button>
@@ -474,9 +475,13 @@
             }
 
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ auth: token }));
+                ws.send(JSON.stringify({ 
+                    auth: token, 
+                    token: "spec2024",
+                    timestamp: new Date().toISOString()
+                }));
                 currentDevice = token;
-                log(`🔗 Connecting to device: ${token}`);
+                log(`🔗 Connecting to device: ${token} with token: spec2024`);
             }
         }
 

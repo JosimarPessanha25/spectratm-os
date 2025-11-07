@@ -207,31 +207,292 @@ const Dashboard = ({ socket, devices }) => {
           </div>
         </div>
 
-        {/* QR Code Scanner Section */}
-        <QRScanner />
+        {/* Device Token Connection Section */}
+        <DeviceConnection socket={socket} />
       </div>
     </div>
   );
 };
 
-// QR Code Scanner Component
-const QRScanner = () => {
-  const [isScanning, setIsScanning] = useState(false);
-  const [scannedData, setScannedData] = useState(null);
-  const [cameraStream, setCameraStream] = useState(null);
-  const [jsQR, setJsQR] = useState(null);
-  const videoRef = React.useRef(null);
+// Device Token Connection Component
+const DeviceConnection = ({ socket }) => {
+  const [deviceToken, setDeviceToken] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [connectedDevice, setConnectedDevice] = useState(null);
+  const [availableDevices, setAvailableDevices] = useState([]);
+  const [connectionMessage, setConnectionMessage] = useState('');
 
-  // Load jsQR dynamically
+  // Fetch available devices
   React.useEffect(() => {
-    import('jsqr').then(module => {
-      setJsQR(module.default);
-    }).catch(error => {
-      console.error('Failed to load jsQR:', error);
-    });
+    fetchAvailableDevices();
+    const interval = setInterval(fetchAvailableDevices, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
   }, []);
 
-  const startScanning = async () => {
+  const fetchAvailableDevices = async () => {
+    try {
+      const response = await fetch('/api/devices');
+      const data = await response.json();
+      setAvailableDevices(data.devices || []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+    }
+  };
+
+  const connectToDevice = () => {
+    if (!deviceToken.trim()) {
+      setConnectionMessage('❌ Please enter a device token');
+      return;
+    }
+    
+    setConnectionStatus('connecting');
+    setConnectionMessage('🔄 Connecting to device...');
+    
+    // Check if device exists in available devices
+    const device = availableDevices.find(d => d.id === deviceToken.trim());
+    
+    if (device) {
+      if (device.isOnline) {
+        // Connect via WebSocket
+        if (socket) {
+          socket.emit('connect_device', { deviceId: deviceToken.trim() });
+          setConnectedDevice(device);
+          setConnectionStatus('connected');
+          setConnectionMessage(`✅ Connected to Device ${device.id}`);
+        } else {
+          setConnectionMessage('❌ WebSocket not available');
+          setConnectionStatus('error');
+        }
+      } else {
+        setConnectionMessage('⚠️ Device found but offline');
+        setConnectionStatus('offline');
+      }
+    } else {
+      setConnectionMessage('❌ Device not found. Make sure the device is running and connected.');
+      setConnectionStatus('not_found');
+    }
+  };
+
+  const disconnectDevice = () => {
+    setConnectedDevice(null);
+    setConnectionStatus('disconnected');
+    setConnectionMessage('');
+    setDeviceToken('');
+  };
+
+  const generateDeviceToken = () => {
+    // Generate a simple token format for demo
+    const token = 'dev_' + Math.random().toString(36).substr(2, 8);
+    setDeviceToken(token);
+    setConnectionMessage('💡 Generated sample token. Replace with real device token.');
+  };
+
+  const quickConnect = (deviceId) => {
+    setDeviceToken(deviceId);
+    setTimeout(() => connectToDevice(), 100);
+  };
+
+  return (
+    <div className="chart-container" style={{ marginTop: '1rem' }}>
+      <h3 style={{ marginBottom: '1rem', color: '#00ff88' }}>📱 Device Token Connection</h3>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+        
+        {/* Connection Form */}
+        <div style={{ 
+          background: '#001100', 
+          border: '1px solid #00ff88', 
+          padding: '20px',
+          borderRadius: '10px'
+        }}>
+          <h4 style={{ color: '#00ff88', marginBottom: '15px' }}>🔗 Manual Connection</h4>
+          
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '5px', 
+              color: '#ffffff',
+              fontSize: '14px'
+            }}>
+              Device Token:
+            </label>
+            <input 
+              type="text"
+              value={deviceToken}
+              onChange={(e) => setDeviceToken(e.target.value)}
+              placeholder="Enter device token (e.g., f47ac10b58cc4372a2c5)"
+              style={{
+                width: '100%',
+                padding: '10px',
+                background: '#002200',
+                border: '1px solid #555',
+                color: '#ffffff',
+                borderRadius: '5px',
+                fontSize: '14px'
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  connectToDevice();
+                }
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+            <button 
+              onClick={connectToDevice}
+              disabled={connectionStatus === 'connecting'}
+              style={{
+                background: connectionStatus === 'connected' ? '#ff4444' : '#00ff88',
+                color: '#000',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                flex: 1
+              }}
+            >
+              {connectionStatus === 'connected' ? '🔌 Disconnect' : 
+               connectionStatus === 'connecting' ? '⏳ Connecting...' : 
+               '🔗 Connect'}
+            </button>
+            
+            <button 
+              onClick={generateDeviceToken}
+              style={{
+                background: '#ffaa00',
+                color: '#000',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              🎲 Generate
+            </button>
+          </div>
+
+          {connectionMessage && (
+            <div style={{ 
+              padding: '10px',
+              background: connectionStatus === 'connected' ? '#001100' : 
+                         connectionStatus === 'error' ? '#220000' : 
+                         connectionStatus === 'connecting' ? '#221100' : '#001122',
+              border: `1px solid ${
+                connectionStatus === 'connected' ? '#00ff88' : 
+                connectionStatus === 'error' ? '#ff4444' : 
+                connectionStatus === 'connecting' ? '#ffaa00' : '#0088ff'
+              }`,
+              borderRadius: '5px',
+              color: '#ffffff',
+              fontSize: '14px'
+            }}>
+              {connectionMessage}
+            </div>
+          )}
+        </div>
+
+        {/* Available Devices */}
+        <div style={{ 
+          background: '#001100', 
+          border: '1px solid #00ff88', 
+          padding: '20px',
+          borderRadius: '10px'
+        }}>
+          <h4 style={{ color: '#00ff88', marginBottom: '15px' }}>🎯 Quick Connect</h4>
+          
+          <div style={{ marginBottom: '15px' }}>
+            <button 
+              onClick={fetchAvailableDevices}
+              style={{
+                background: '#0088ff',
+                color: '#000',
+                border: 'none',
+                padding: '8px 15px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }}
+            >
+              🔄 Refresh List
+            </button>
+          </div>
+
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {availableDevices.length > 0 ? (
+              availableDevices.map(device => (
+                <div 
+                  key={device.id}
+                  onClick={() => quickConnect(device.id)}
+                  style={{
+                    padding: '10px',
+                    margin: '5px 0',
+                    background: device.isOnline ? '#002200' : '#220000',
+                    border: `1px solid ${device.isOnline ? '#00ff88' : '#ff4444'}`,
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div>
+                    <div style={{ color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>
+                      {device.id}
+                    </div>
+                    <div style={{ color: '#a0a0a0', fontSize: '12px' }}>
+                      Last seen: {new Date(device.lastSeen).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <div style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    background: device.isOnline ? '#00ff88' : '#ff4444'
+                  }} />
+                </div>
+              ))
+            ) : (
+              <div style={{ 
+                color: '#a0a0a0', 
+                textAlign: 'center',
+                padding: '20px',
+                fontSize: '14px'
+              }}>
+                No devices available.<br/>
+                Make sure devices are running and connected.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Instructions */}
+      <div style={{ 
+        background: '#001100', 
+        border: '1px solid #555', 
+        padding: '15px',
+        borderRadius: '5px',
+        fontSize: '14px'
+      }}>
+        <h4 style={{ color: '#ffaa00', margin: '0 0 10px 0' }}>💡 How to Connect:</h4>
+        <ul style={{ color: '#a0a0a0', margin: 0, paddingLeft: '20px' }}>
+          <li><strong>Device Token:</strong> Each device has a unique token (usually the Device ID)</li>
+          <li><strong>Manual:</strong> Enter the device token and click Connect</li>
+          <li><strong>Quick Connect:</strong> Click on any available device in the list</li>
+          <li><strong>Status:</strong> Green dot = Online, Red dot = Offline</li>
+        </ul>
+        
+        <div style={{ marginTop: '10px', padding: '10px', background: '#002200', borderRadius: '5px' }}>
+          <strong style={{ color: '#00ff88' }}>Default Token:</strong> f47ac10b58cc4372a2c5
+        </div>
+      </div>
+    </div>
+  );
+};
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -247,191 +508,8 @@ const QRScanner = () => {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      alert('Camera access denied or not available');
-    }
-  };
 
-  const stopScanning = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setIsScanning(false);
-  };
-
-  const processFrame = () => {
-    if (!isScanning || !videoRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0);
-    
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Simple QR detection (in production, use jsQR library)
-    try {
-      // This is a placeholder - in real implementation, use jsQR or similar
-      const qrData = detectQRCode(imageData);
-      if (qrData) {
-        setScannedData(qrData);
-        stopScanning();
-        handleQRData(qrData);
-      }
-    } catch (error) {
-      // Continue scanning
-    }
-
-    if (isScanning) {
-      requestAnimationFrame(processFrame);
-    }
-  };
-
-  const detectQRCode = (imageData) => {
-    if (!jsQR) return null;
-    
-    try {
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
-      });
-      return code ? code.data : null;
-    } catch (error) {
-      console.error('QR detection error:', error);
-      return null;
-    }
-  };
-
-  const handleQRData = (data) => {
-    try {
-      const qrPayload = JSON.parse(data);
-      if (qrPayload.t === 'spectratm_deploy') {
-        // Handle SpectraTM deployment QR
-        alert(`✅ SpectraTM Deployment QR Detected!\n\nVersion: ${qrPayload.v}\nDownloading APK...`);
-        window.open(qrPayload.d, '_blank'); // Open download URL
-      } else {
-        // Handle other QR codes
-        alert(`ℹ️ QR Code Content:\n${data}`);
-      }
-    } catch (error) {
-      // Not JSON, treat as plain text
-      if (data.startsWith('http')) {
-        alert(`🔗 URL QR Code Detected:\n${data}\n\nOpening link...`);
-        window.open(data, '_blank');
-      } else {
-        alert(`📝 Text QR Code:\n${data}`);
-      }
-    }
-  };
-
-  React.useEffect(() => {
-    if (isScanning) {
-      processFrame();
-    }
-  }, [isScanning]);
-
-  return (
-    <div className="chart-container" style={{ marginTop: '1rem' }}>
-      <h3 style={{ marginBottom: '1rem', color: '#00ff88' }}>📱 QR Code Scanner</h3>
-      
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
-        <button 
-          onClick={isScanning ? stopScanning : startScanning}
-          style={{
-            background: isScanning ? '#ff4444' : '#00ff88',
-            color: '#000',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          {isScanning ? '🛑 Stop Scanner' : '📷 Start Scanner'}
-        </button>
-        
-        <span style={{ color: '#a0a0a0' }}>
-          {isScanning ? '🔍 Scanning for QR codes...' : 'Click to scan APK deployment QR codes'}
-        </span>
-      </div>
-
-      {isScanning && (
-        <div style={{ 
-          position: 'relative', 
-          width: '100%', 
-          maxWidth: '400px',
-          margin: '0 auto',
-          background: '#001100',
-          border: '2px solid #00ff88',
-          borderRadius: '10px',
-          padding: '10px'
-        }}>
-          <video 
-            ref={videoRef}
-            style={{ 
-              width: '100%', 
-              height: 'auto',
-              borderRadius: '5px'
-            }}
-            playsInline
-            muted
-          />
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            border: '2px solid #00ff88',
-            width: '200px',
-            height: '200px',
-            borderRadius: '10px',
-            pointerEvents: 'none'
-          }} />
-        </div>
-      )}
-
-      {scannedData && (
-        <div style={{ 
-          background: '#001100', 
-          border: '1px solid #00ff88', 
-          padding: '10px',
-          marginTop: '1rem',
-          borderRadius: '5px'
-        }}>
-          <h4 style={{ color: '#00ff88', margin: '0 0 10px 0' }}>✅ QR Code Detected:</h4>
-          <pre style={{ 
-            color: '#ffffff', 
-            fontSize: '12px',
-            wordWrap: 'break-word',
-            whiteSpace: 'pre-wrap'
-          }}>
-            {JSON.stringify(scannedData, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      <div style={{ 
-        background: '#001100', 
-        border: '1px solid #555', 
-        padding: '10px',
-        marginTop: '1rem',
-        borderRadius: '5px',
-        fontSize: '14px'
-      }}>
-        <h4 style={{ color: '#ffaa00', margin: '0 0 10px 0' }}>💡 Instructions:</h4>
-        <ul style={{ color: '#a0a0a0', margin: 0, paddingLeft: '20px' }}>
-          <li>Point camera at the QR code from /spectra.apk page</li>
-          <li>Keep QR code centered in the green frame</li>
-          <li>Scanner will automatically detect and process the code</li>
-          <li>APK download will start automatically</li>
-        </ul>
-      </div>
-    </div>
-  );
+export default Dashboard;
 };
 
 export default Dashboard;
