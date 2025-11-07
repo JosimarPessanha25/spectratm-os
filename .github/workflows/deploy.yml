@@ -30,8 +30,13 @@ jobs:
           -storepass spec2024 -keypass spec2024 \
           -dname "CN=SpectraTM, OU=Spectra, O=Spectra, L=Global, S=Cyber, C=XX"
           
-    - name: Make gradlew executable
-      run: chmod +x android/gradlew
+    - name: Create gradle wrapper if missing
+      run: |
+        if [ ! -f android/gradlew ]; then
+          cd android
+          gradle wrapper --gradle-version 8.5
+        fi
+        chmod +x android/gradlew
       
     - name: Build APK
       run: |
@@ -41,7 +46,7 @@ jobs:
           -Pandroid.injected.signing.store.password=spec2024 \
           -Pandroid.injected.signing.key.alias=spectra \
           -Pandroid.injected.signing.key.password=spec2024 \
-          --no-daemon
+          --no-daemon --info
           
     - name: Upload APK artifact
       uses: actions/upload-artifact@v3

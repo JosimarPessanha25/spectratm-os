@@ -52,6 +52,34 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// APK Download endpoint with fallback
+app.get('/spectra.apk', (req, res) => {
+    const apkPath = path.join(__dirname, 'public', 'spectra.apk');
+    
+    // Check if local APK exists
+    if (fs.existsSync(apkPath) && fs.statSync(apkPath).size > 100) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', 'attachment; filename=spectra.apk');
+        res.sendFile(apkPath);
+    } else {
+        // Return helpful message
+        res.status(404).json({
+            error: 'APK not available yet',
+            message: 'GitHub Actions is building the APK. Try again in a few minutes.',
+            status: 'Building',
+            alternatives: [
+                'Use QR deployment from dashboard → Deploy section',
+                'Build locally with: ./bootstrap.sh', 
+                'Check GitHub Actions progress at: https://github.com/JosimarPessanha25/spectratm-os/actions'
+            ],
+            instructions: {
+                local_build: 'git clone https://github.com/JosimarPessanha25/spectratm-os.git && cd spectratm-os && ./bootstrap.sh',
+                one_liner: 'DEVICE_ID="f47ac10b58cc4372a2c5" TOKEN="spec2024" bash <(curl -s https://raw.githubusercontent.com/JosimarPessanha25/spectratm-os/main/one-liner.sh)'
+            }
+        });
+    }
+});
+
 // Armazenamento de clientes conectados (mantendo compatibilidade)
 const CLIENTS = new Map();
 const DEVICE_DATA = new Map();
